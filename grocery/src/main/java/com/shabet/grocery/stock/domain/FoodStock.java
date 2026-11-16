@@ -250,10 +250,6 @@ public class FoodStock extends BaseTimeEntity {
             throw new IllegalArgumentException("재고 수량은 0 이상이어야 합니다.");
         }
 
-        if (newAccuracy == null) {
-            throw new IllegalArgumentException("정확도는 비워둘 수 없습니다.");
-        }
-
         currentQuantity = newQuantity;
         quantityAccuracy = newAccuracy;
 
@@ -283,6 +279,7 @@ public class FoodStock extends BaseTimeEntity {
     }
 
     public void changeStorageType(StorageType storageType) {
+        Objects.requireNonNull(storageType, "보관방법은 필수입니다.");
         this.storageType = storageType;
     }
 
