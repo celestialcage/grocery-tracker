@@ -14,6 +14,7 @@ public class Household extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "household_id")
     private Long id;
 
     @Column(nullable = false, length = 50)

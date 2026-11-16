@@ -10,8 +10,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 
 @Getter
 @Entity
@@ -33,6 +33,7 @@ public class FoodStock extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "food_stock_id")
     private Long id;
 
     // 동시성 처리용 필드. 향후 OptimisticLockException 처리까지 해보면 JPA 동시성 제어 경험 포인트
@@ -85,7 +86,7 @@ public class FoodStock extends BaseTimeEntity {
 
     private LocalDate expiresAt;
 
-    private LocalDateTime openedAt;
+    private Instant openedAt;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
@@ -101,7 +102,7 @@ public class FoodStock extends BaseTimeEntity {
     @Column(length = 500)
     private String memo;
 
-    private LocalDateTime depletedAt;
+    private Instant depletedAt;
 
     @Enumerated(EnumType.STRING)
     @Column(length = 30)
@@ -196,7 +197,7 @@ public class FoodStock extends BaseTimeEntity {
     // 수량은 consume, discard, adjust 셋 중 하나의 행위로서만 변경 ----------
     // 소비
     public void consume(BigDecimal quantity, QuantityAccuracy operationAccuracy,
-                        LocalDateTime occurredAt) {
+                        Instant occurredAt) {
         validateDecreaseQuantity(quantity);
 
         currentQuantity = currentQuantity.subtract(quantity);
@@ -210,7 +211,7 @@ public class FoodStock extends BaseTimeEntity {
     public void discard(
             BigDecimal quantity,
             QuantityAccuracy operationAccuracy,
-            LocalDateTime occurredAt
+            Instant occurredAt
     ) {
         validateDecreaseQuantity(quantity);
 
@@ -225,11 +226,16 @@ public class FoodStock extends BaseTimeEntity {
     public void adjust(
             BigDecimal newQuantity,
             QuantityAccuracy newAccuracy,
-            LocalDateTime occurredAt
+            Instant occurredAt
     ) {
         if (newQuantity == null ||
         newQuantity.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("재고 수량은 0 이상이어야 합니다.");
+        }
+
+        // 일단 검사해봤는데 검토 필요
+        if (newAccuracy == null) {
+            throw new IllegalArgumentException("정확도는 비워둘 수 없습니다.");
         }
 
         currentQuantity = newQuantity;
@@ -239,7 +245,7 @@ public class FoodStock extends BaseTimeEntity {
     }
 
     // 개봉 처리
-    public void open(LocalDateTime openedAt) {
+    public void open(Instant openedAt) {
         if (this.openedAt != null) {
             throw new IllegalStateException("이미 개봉된 재고입니다.");
         }
@@ -296,7 +302,7 @@ public class FoodStock extends BaseTimeEntity {
 
     // 소진 처리
     private void updateDepletionState(
-            DepletionReason reason, LocalDateTime occurredAt
+            DepletionReason reason, Instant occurredAt
     ) {
         if (currentQuantity.compareTo(BigDecimal.ZERO) == 0) {
             depletedAt = occurredAt;

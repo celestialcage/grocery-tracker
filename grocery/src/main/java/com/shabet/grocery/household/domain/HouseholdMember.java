@@ -33,6 +33,7 @@ import java.time.LocalDateTime;
 public class HouseholdMember {
 
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "household_member_id")
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

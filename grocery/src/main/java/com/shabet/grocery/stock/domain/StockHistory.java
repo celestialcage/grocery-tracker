@@ -1,14 +1,14 @@
 package com.shabet.grocery.stock.domain;
 
-import com.shabet.grocery.global.entity.BaseTimeEntity;
 import com.shabet.grocery.user.domain.User;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Getter
 @Entity
@@ -26,10 +26,11 @@ import java.time.LocalDateTime;
         }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class StockHistory extends BaseTimeEntity {
+public class StockHistory {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "stock_history_id")
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -86,7 +87,10 @@ public class StockHistory extends BaseTimeEntity {
     private QuantityAccuracy afterAccuracy;
 
     @Column(name = "occurred_at", nullable = false)
-    private LocalDateTime occurredAt;
+    private Instant occurredAt;
+
+    @CreatedDate
+    private Instant createdAt;
 
     // append-only 성격이라 변경 메서드들은 필요없음.
 
@@ -99,7 +103,7 @@ public class StockHistory extends BaseTimeEntity {
             BigDecimal afterQuantity,
             QuantityAccuracy changeAccuracy,
             QuantityAccuracy afterAccuracy,
-            LocalDateTime occurredAt
+            Instant occurredAt
     ) {
         this.foodStock = foodStock;
         this.actor = actor;
@@ -119,7 +123,7 @@ public class StockHistory extends BaseTimeEntity {
     public static StockHistory registered(
             FoodStock foodStock,
             User actor,
-            LocalDateTime occurredAt
+            Instant occurredAt
     ) {
         return new StockHistory(
                 foodStock,
@@ -143,7 +147,7 @@ public class StockHistory extends BaseTimeEntity {
             BigDecimal beforeQuantity,
             BigDecimal consumedQuantity,
             QuantityAccuracy changeAccuracy,
-            LocalDateTime occurredAt
+            Instant occurredAt
     ) {
         return new StockHistory(
                 foodStock,
@@ -167,7 +171,7 @@ public class StockHistory extends BaseTimeEntity {
             BigDecimal beforeQuantity,
             BigDecimal discardedQuantity,
             QuantityAccuracy changeAccuracy,
-            LocalDateTime occurredAt
+            Instant occurredAt
     ) {
         return new StockHistory(
                 foodStock,
@@ -189,7 +193,7 @@ public class StockHistory extends BaseTimeEntity {
             FoodStock foodStock,
             User actor,
             BigDecimal beforeQuantity,
-            LocalDateTime occurredAt
+            Instant occurredAt
     ) {
         BigDecimal afterQuantity = foodStock.getCurrentQuantity();
 
@@ -214,7 +218,7 @@ public class StockHistory extends BaseTimeEntity {
     public static StockHistory opened(
             FoodStock foodStock,
             User actor,
-            LocalDateTime occurredAt
+            Instant occurredAt
     ) {
         return new StockHistory(
                 foodStock,
