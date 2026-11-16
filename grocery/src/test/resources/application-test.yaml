@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    # Testcontainers 설정이 누락되면 개발 DB 대신 연결 실패하도록 지정
+    url: jdbc:postgresql://127.0.0.1:1/test_only
+    username: invalid
+    password: invalid
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+  flyway:
+    enabled: true
