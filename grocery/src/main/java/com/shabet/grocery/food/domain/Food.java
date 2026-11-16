@@ -8,6 +8,8 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.Objects;
+
 @Getter
 @Entity
 @Table(
@@ -108,6 +110,9 @@ public class Food extends BaseTimeEntity {
             Household household,
             User createdBy
     ) {
+        Objects.requireNonNull(household, "가구는 필수입니다.");
+        Objects.requireNonNull(createdBy, "생성 사용자는 필수입니다.");
+
         return new Food(
                 name,
                 category,

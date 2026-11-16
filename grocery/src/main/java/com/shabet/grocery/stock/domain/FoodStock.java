@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Objects;
 
 @Getter
 @Entity
@@ -159,6 +160,13 @@ public class FoodStock extends BaseTimeEntity {
             String productLabel,
             String memo
     ) {
+        Objects.requireNonNull(unit, "단위는 필수입니다.");
+        Objects.requireNonNull(quantityAccuracy, "정확도는 필수입니다.");
+        Objects.requireNonNull(storageType, "보관방법은 필수입니다.");
+        Objects.requireNonNull(acquisitionType, "취득방식은 필수입니다.");
+        Objects.requireNonNull(household, "가구는 필수입니다.");
+        Objects.requireNonNull(food, "식품 마스터는 필수입니다.");
+
         return new FoodStock(
                 household,
                 food,
@@ -198,6 +206,9 @@ public class FoodStock extends BaseTimeEntity {
     // 소비
     public void consume(BigDecimal quantity, QuantityAccuracy operationAccuracy,
                         Instant occurredAt) {
+        Objects.requireNonNull(operationAccuracy, "정확도는 필수입니다.");
+        Objects.requireNonNull(occurredAt, "발생시간은 필수입니다.");
+
         validateDecreaseQuantity(quantity);
 
         currentQuantity = currentQuantity.subtract(quantity);
@@ -213,6 +224,9 @@ public class FoodStock extends BaseTimeEntity {
             QuantityAccuracy operationAccuracy,
             Instant occurredAt
     ) {
+        Objects.requireNonNull(operationAccuracy, "정확도는 필수입니다.");
+        Objects.requireNonNull(occurredAt, "발생시간은 필수입니다.");
+
         validateDecreaseQuantity(quantity);
 
         currentQuantity = currentQuantity.subtract(quantity);
@@ -228,12 +242,14 @@ public class FoodStock extends BaseTimeEntity {
             QuantityAccuracy newAccuracy,
             Instant occurredAt
     ) {
+        Objects.requireNonNull(newAccuracy, "정확도는 필수입니다.");
+        Objects.requireNonNull(occurredAt, "발생시간은 필수입니다.");
+
         if (newQuantity == null ||
-        newQuantity.compareTo(BigDecimal.ZERO) < 0) {
+                newQuantity.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("재고 수량은 0 이상이어야 합니다.");
         }
 
-        // 일단 검사해봤는데 검토 필요
         if (newAccuracy == null) {
             throw new IllegalArgumentException("정확도는 비워둘 수 없습니다.");
         }
@@ -246,6 +262,8 @@ public class FoodStock extends BaseTimeEntity {
 
     // 개봉 처리
     public void open(Instant openedAt) {
+        Objects.requireNonNull(openedAt, "개봉 시각은 필수입니다.");
+
         if (this.openedAt != null) {
             throw new IllegalStateException("이미 개봉된 재고입니다.");
         }

@@ -6,11 +6,13 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 
 @Getter
+@EntityListeners(AuditingEntityListener.class)
 @Entity
 @Table(
         name = "stock_histories",
@@ -90,6 +92,7 @@ public class StockHistory {
     private Instant occurredAt;
 
     @CreatedDate
+    @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
     // append-only 성격이라 변경 메서드들은 필요없음.
@@ -193,11 +196,17 @@ public class StockHistory {
             FoodStock foodStock,
             User actor,
             BigDecimal beforeQuantity,
+            QuantityAccuracy beforeAccuracy,
             Instant occurredAt
     ) {
         BigDecimal afterQuantity = foodStock.getCurrentQuantity();
+        QuantityAccuracy afterAccuracy = foodStock.getQuantityAccuracy();
 
         BigDecimal changeQuantity = afterQuantity.subtract(beforeQuantity);
+
+        QuantityAccuracy changeAccuracy = beforeAccuracy == QuantityAccuracy.EXACT
+                && afterAccuracy == QuantityAccuracy.EXACT
+                ? QuantityAccuracy.EXACT : QuantityAccuracy.ESTIMATED;
 
         return new StockHistory(
                 foodStock,
@@ -208,8 +217,8 @@ public class StockHistory {
                 changeQuantity,
                 afterQuantity,
 
-                foodStock.getQuantityAccuracy(),
-                foodStock.getQuantityAccuracy(),
+                changeAccuracy,
+                afterAccuracy,
 
                 occurredAt
         );

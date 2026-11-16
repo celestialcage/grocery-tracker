@@ -6,7 +6,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(
@@ -21,10 +21,6 @@ import java.time.LocalDateTime;
                 @Index(
                         name = "idx_household_members_user_id",
                         columnList = "user_id"
-                ),
-                @Index(
-                        name = "idx_household_members_household_id",
-                        columnList = "household_id"
                 )
         }
 )
@@ -57,9 +53,9 @@ public class HouseholdMember {
     private HouseholdRole role;
 
     @Column(nullable = false)
-    private LocalDateTime joinedAt;
+    private Instant joinedAt;
 
-    public HouseholdMember(User user, Household household, HouseholdRole role, LocalDateTime joinedAt) {
+    public HouseholdMember(User user, Household household, HouseholdRole role, Instant joinedAt) {
         this.user = user;
         this.household = household;
         this.role = role;
