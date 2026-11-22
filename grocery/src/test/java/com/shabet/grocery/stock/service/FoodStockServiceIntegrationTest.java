@@ -13,6 +13,7 @@ import com.shabet.grocery.household.domain.HouseholdRole;
 import com.shabet.grocery.household.repository.HouseholdMemberRepository;
 import com.shabet.grocery.household.repository.HouseholdRepository;
 import com.shabet.grocery.stock.domain.*;
+import com.shabet.grocery.stock.dto.FoodStockDetailResponse;
 import com.shabet.grocery.stock.repository.FoodStockRepository;
 import com.shabet.grocery.stock.repository.StockHistoryRepository;
 import com.shabet.grocery.user.domain.User;
@@ -30,6 +31,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,13 +43,20 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @Import(TestcontainersConfiguration.class)
 class FoodStockServiceIntegrationTest {
 
-    @Autowired FoodStockService foodStockService;
-    @Autowired UserRepository userRepository;
-    @Autowired HouseholdRepository householdRepository;
-    @Autowired HouseholdMemberRepository memberRepository;
-    @Autowired FoodRepository foodRepository;
-    @Autowired FoodStockRepository stockRepository;
-    @Autowired StockHistoryRepository historyRepository;
+    @Autowired
+    FoodStockService foodStockService;
+    @Autowired
+    UserRepository userRepository;
+    @Autowired
+    HouseholdRepository householdRepository;
+    @Autowired
+    HouseholdMemberRepository memberRepository;
+    @Autowired
+    FoodRepository foodRepository;
+    @Autowired
+    FoodStockRepository stockRepository;
+    @Autowired
+    StockHistoryRepository historyRepository;
 
     private User actor;
     private Household household;
@@ -137,7 +146,7 @@ class FoodStockServiceIntegrationTest {
 
         User outsider = createUser();
 
-        assertThatThrownBy(()->
+        assertThatThrownBy(() ->
                 foodStockService.register(
                         outsider.getId(),
                         command(household.getId(), milk.getId())
@@ -179,10 +188,10 @@ class FoodStockServiceIntegrationTest {
         );
 
         assertThatThrownBy(() ->
-                        foodStockService.register(
-                actor.getId(),
-                command(household.getId(), customFood.getId())
-            )
+                foodStockService.register(
+                        actor.getId(),
+                        command(household.getId(), customFood.getId())
+                )
         ).isInstanceOf(SecurityException.class);
 
         assertThat(stockRepository.countByHousehold_Id(household.getId()))
@@ -264,7 +273,7 @@ class FoodStockServiceIntegrationTest {
         assertThat(histories).hasSize(2);
 
         StockHistory consumed = histories.stream()
-                .filter(h->h.getType()==StockHistoryType.CONSUMED)
+                .filter(h -> h.getType() == StockHistoryType.CONSUMED)
                 .findFirst()
                 .orElseThrow();
 
@@ -319,7 +328,7 @@ class FoodStockServiceIntegrationTest {
         );
 
         assertThatThrownBy(() ->
-                        foodStockService.consume(
+                foodStockService.consume(
                         actor.getId(),
                         new ConsumeFoodStockCommand(
                                 household.getId(),
@@ -374,7 +383,7 @@ class FoodStockServiceIntegrationTest {
         assertThat(histories).hasSize(2);
 
         StockHistory discarded = histories.stream()
-                .filter(h->h.getType()==StockHistoryType.DISCARDED)
+                .filter(h -> h.getType() == StockHistoryType.DISCARDED)
                 .findFirst()
                 .orElseThrow();
 
@@ -445,7 +454,7 @@ class FoodStockServiceIntegrationTest {
         StockHistory adjusted =
                 historyRepository.findAllByFoodStock_Id(stockId)
                         .stream()
-                        .filter(h->h.getType()==StockHistoryType.ADJUSTED)
+                        .filter(h -> h.getType() == StockHistoryType.ADJUSTED)
                         .findFirst()
                         .orElseThrow();
 
@@ -641,6 +650,124 @@ class FoodStockServiceIntegrationTest {
     }
     // todo: FoodStock.open() 수량이 0인 재고도 개봉할 수 있는 상태. (예외 정책 다듬을 때 보기.)
     // 소진된 식품을 개봉하는 행위? <- 이상해... 근데 개봉하고도 소비하지 않는 것도 이상...
+
+    // 정상 상세 조회
+    @Test
+    @DisplayName("상세 조회 시 Food 이름, 카테고리, 재고 수량, 소비 기한이 정확한지 확인")
+    void get_detail_works_properly() {
+        Long stockId = foodStockService.register(
+                actor.getId(),
+                command(household.getId(), milk.getId())
+        );
+
+        FoodStock stock = stockRepository.findById(stockId).orElseThrow();
+
+        FoodStockDetailResponse response = foodStockService.getDetail(
+                actor.getId(), household.getId(), stockId
+        );
+
+        assertThat(response.foodName()).isEqualTo(
+                stock.getFood().getName()
+        );
+
+        assertThat(response.foodCategory()).isEqualTo(
+                stock.getFood().getCategory()
+        );
+
+        assertThat(response.currentQuantity()).isEqualTo(
+                stock.getCurrentQuantity()
+        );
+
+        assertThat(response.expiresAt()).isEqualTo(
+                stock.getExpiresAt()
+        );
+    }
+
+    // 다른 Household의 재고 조회
+    @Test
+    @DisplayName("구성원이더라도 요청한 Household에 속하지 않는 재고는 조회할 수 없어야 함")
+    void cannot_get_other_households_detail() {
+
+        User otherUser = createUser();
+
+        Household otherHousehold = householdRepository.save(
+                new Household("다른 집")
+        );
+
+        memberRepository.save(
+                new HouseholdMember(
+                        otherUser,
+                        otherHousehold,
+                        HouseholdRole.OWNER,
+                        Instant.now()
+                )
+        );
+
+        Long stockId = foodStockService.register(
+                otherUser.getId(),
+                command(otherHousehold.getId(), milk.getId())
+        );
+
+        assertThatThrownBy(() ->
+                foodStockService.getDetail(actor.getId(), household.getId(), stockId)
+        ).isInstanceOf(NoSuchElementException.class);
+    }
+
+    // 비구성원 접근
+    @Test
+    @DisplayName("Household 구성원이 아닌 사용자는 조회 거부")
+    void outsider_cannot_get_households_detail() {
+        Long stockId = foodStockService.register(
+                actor.getId(),
+                command(household.getId(), milk.getId())
+        );
+
+        User otherUser = createUser();
+        Household otherHousehold = householdRepository.save(
+                new Household("다른 집")
+        );
+
+        memberRepository.save(
+                new HouseholdMember(
+                        otherUser,
+                        otherHousehold,
+                        HouseholdRole.OWNER,
+                        Instant.now()
+                )
+        );
+
+        assertThatThrownBy(() ->
+                foodStockService.getDetail(
+                        otherUser.getId(), household.getId(), stockId
+                )
+        ).isInstanceOf(SecurityException.class);
+    }
+
+    // 소진된 재고 조회
+    @Test
+    @DisplayName("수량이 0이어도 상세 조회가 가능하며 depletionReason 확인")
+    void get_depleted_stock_details_and_reason() {
+        Long stockId = foodStockService.register(
+                actor.getId(), command(household.getId(), milk.getId())
+        );
+
+        // adjust
+        foodStockService.adjust(
+                actor.getId(),
+                new AdjustFoodStockCommand(
+                        household.getId(),
+                        stockId,
+                        BigDecimal.ZERO,
+                        QuantityAccuracy.EXACT
+                )
+        );
+
+        FoodStockDetailResponse response = foodStockService.getDetail(
+                actor.getId(), household.getId(), stockId
+        );
+
+        assertThat(response.depletionReason()).isNotNull();
+    }
 
     // 프라이빗 헬퍼
     private User createUser() {

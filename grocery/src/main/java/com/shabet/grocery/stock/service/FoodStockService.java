@@ -9,6 +9,7 @@ import com.shabet.grocery.household.service.HouseholdAccessValidator;
 import com.shabet.grocery.stock.domain.FoodStock;
 import com.shabet.grocery.stock.domain.QuantityAccuracy;
 import com.shabet.grocery.stock.domain.StockHistory;
+import com.shabet.grocery.stock.dto.FoodStockDetailResponse;
 import com.shabet.grocery.stock.repository.FoodStockRepository;
 import com.shabet.grocery.stock.repository.StockHistoryRepository;
 import com.shabet.grocery.user.domain.User;
@@ -120,7 +121,6 @@ public class FoodStockService {
             Long actorUserId,
             DiscardFoodStockCommand command
     )  {
-        // todo: consume과 공통 부분은 향후 추출 여부 판단
         User actor = findActor(actorUserId);
 
         FoodStock stock = findAccessibleStock(actorUserId, command.householdId(), command.stockId());
@@ -202,6 +202,18 @@ public class FoodStockService {
         );
 
         stockHistoryRepository.save(history);
+    }
+
+    // 조회
+    @Transactional(readOnly = true)
+    public FoodStockDetailResponse getDetail(
+            Long actorUserId,
+            Long householdId,
+            Long stockId
+    ) {
+        FoodStock stock = findAccessibleStock(actorUserId, householdId, stockId);
+
+        return FoodStockDetailResponse.from(stock);
     }
 
     private void validateAvailableFood(Food food, Household household) {
