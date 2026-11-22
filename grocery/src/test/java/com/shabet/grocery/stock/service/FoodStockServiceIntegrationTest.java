@@ -517,6 +517,131 @@ class FoodStockServiceIntegrationTest {
     // 또 권한 검증은 consume(), discard(), adjust()가 동일한 접근 제어 패턴을 사용하므로,
     // 최소한 다른 가구의 재고를 변경할 수 없는지도 통합 테스트로 하나씩 확인하면 좋다.
 
+    // open 테스트
+    // todo: open 약간 고민... 열고 소비 안하는 게 좀 이상하지만 백엔드에서 분리할 이유가 있을지... 해봐야 알듯
+    @Test
+    @DisplayName("재고 개봉 시 openedAt과 OPENED history 기록")
+    void open_stock_creates_history() {
+        Long stockId = foodStockService.register(
+                actor.getId(),
+                command(household.getId(), milk.getId())
+        );
+
+        FoodStock before = stockRepository.findById(stockId).orElseThrow();
+
+        Long beforeVersion = before.getVersion();
+
+        // when
+        foodStockService.open(
+                actor.getId(),
+                new OpenFoodStockCommand(
+                        household.getId(),
+                        stockId
+                )
+        );
+
+        // then
+        FoodStock stock = stockRepository.findById(stockId).orElseThrow();
+
+        assertThat(stock.getOpenedAt()).isNotNull();
+
+        // 개봉해도 수량과 정확도는 그대로
+        assertThat(stock.getCurrentQuantity()).isEqualByComparingTo("650");
+
+        assertThat(stock.getQuantityAccuracy()).isEqualTo(QuantityAccuracy.ESTIMATED);
+
+        // openedAt 변경이 dirty checking으로 반영됨.
+        assertThat(stock.getVersion()).isEqualTo(beforeVersion + 1);
+        List<StockHistory> histories =
+                historyRepository.findAllByFoodStock_Id(stockId);
+
+        assertThat(histories).hasSize(2);
+
+        StockHistory opened = histories.stream()
+                .filter(h -> h.getType() == StockHistoryType.OPENED)
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(opened.getOccurredAt()).isEqualTo(stock.getOpenedAt());
+
+        // 수량 변경이 없는 사건
+        assertThat(opened.getBeforeQuantity()).isNull();
+        assertThat(opened.getChangeQuantity()).isNull();
+        assertThat(opened.getAfterQuantity()).isNull();
+
+        assertThat(opened.getChangeAccuracy()).isNull();
+        assertThat(opened.getAfterAccuracy()).isNull();
+
+        assertThat(opened.getActor().getId()).isEqualTo(actor.getId());
+    }
+
+    @Test
+    @DisplayName("이미 개봉된 재고는 다시 개봉할 수 없음")
+    void cannot_open_stock_twice() {
+        Long stockId = foodStockService.register(
+                actor.getId(),
+                command(household.getId(), milk.getId())
+        );
+
+        OpenFoodStockCommand openCommand =
+                new OpenFoodStockCommand(
+                        household.getId(),
+                        stockId
+                );
+
+        // 첫 번째 개봉
+        foodStockService.open(actor.getId(), openCommand);
+
+        FoodStock stock = stockRepository.findById(stockId).orElseThrow();
+
+        Instant firstOpenedAt = stock.getOpenedAt();
+
+        // 두 번째 개봉은 실패
+        assertThatThrownBy(() ->
+                foodStockService.open(actor.getId(), openCommand)
+        )
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("이미 개봉된 재고입니다.");
+
+        FoodStock after = stockRepository.findById(stockId).orElseThrow();
+
+        // 최초 개봉 시각 유지
+        assertThat(after.getOpenedAt()).isEqualTo(firstOpenedAt);
+
+        // REGISTERED + OPENED
+        // 실패한 개봉으로 History가 추가되지 않음
+        assertThat(historyRepository.findAllByFoodStock_Id(stockId)).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("가구 구성원이 아닌 사용자는 개봉할 수 없음")
+    void non_member_cannot_open_stock() {
+        Long stockId = foodStockService.register(
+                actor.getId(),
+                command(household.getId(), milk.getId())
+        );
+
+        User outsider = createUser();
+
+        assertThatThrownBy(() ->
+                foodStockService.open(
+                        outsider.getId(),
+                        new OpenFoodStockCommand(
+                                household.getId(),
+                                stockId
+                        )
+                )
+        ).isInstanceOf(SecurityException.class);
+
+        FoodStock stock = stockRepository.findById(stockId).orElseThrow();
+
+        assertThat(stock.getOpenedAt()).isNull();
+
+        assertThat(historyRepository.findAllByFoodStock_Id(stockId)).hasSize(1);
+    }
+    // todo: FoodStock.open() 수량이 0인 재고도 개봉할 수 있는 상태. (예외 정책 다듬을 때 보기.)
+    // 소진된 식품을 개봉하는 행위? <- 이상해... 근데 개봉하고도 소비하지 않는 것도 이상...
+
     // 프라이빗 헬퍼
     private User createUser() {
         return userRepository.save(

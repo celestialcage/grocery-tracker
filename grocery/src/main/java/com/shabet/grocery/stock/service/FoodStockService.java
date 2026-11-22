@@ -222,6 +222,41 @@ public class FoodStockService {
         stockHistoryRepository.save(history);
     }
 
+    @Transactional
+    public void open(
+            Long actorUserId,
+            OpenFoodStockCommand command
+    ) {
+        User actor = userRepository.findById(actorUserId)
+                .orElseThrow(() -> new NoSuchElementException("사용자가 없습니다."));
+
+        accessValidator.requireMember(
+                command.householdId(),
+                actorUserId
+        );
+
+        FoodStock stock = foodStockRepository
+                .findByIdAndHousehold_Id(
+                        command.stockId(),
+                        command.householdId()
+                )
+                .orElseThrow(() -> new NoSuchElementException("재고가 없습니다."));
+
+        Instant openedAt = Instant.now();
+
+        // 기존 도메인 메서드로 개봉 처리
+        stock.open(openedAt);
+
+        // 개봉 이력 생성
+        StockHistory history = StockHistory.opened(
+                stock,
+                actor,
+                openedAt
+        );
+
+        stockHistoryRepository.save(history);
+    }
+
     private void validateAvailableFood(Food food, Household household) {
 
         if (!food.isActive()) {
