@@ -246,18 +246,15 @@ class FoodStockServiceIntegrationTest {
                 .findById(stockId)
                 .orElseThrow();
 
-        assertThat(stock.getCurrentQuantity())
-                .isEqualByComparingTo("550");
+        assertThat(stock.getCurrentQuantity()).isEqualByComparingTo("550");
 
         // 기존 수량이 추정값이니 여전히 ESTIMATED
-        assertThat(stock.getQuantityAccuracy())
-                .isEqualTo(QuantityAccuracy.ESTIMATED);
+        assertThat(stock.getQuantityAccuracy()).isEqualTo(QuantityAccuracy.ESTIMATED);
 
         assertThat(stock.getDepletedAt()).isNull();
 
         // @Version 증가 확인
-        assertThat(stock.getVersion())
-                .isEqualTo(beforeVersion + 1);
+        assertThat(stock.getVersion()).isEqualTo(beforeVersion + 1);
 
         // History 확인
         List<StockHistory> histories =
@@ -271,20 +268,15 @@ class FoodStockServiceIntegrationTest {
                 .findFirst()
                 .orElseThrow();
 
-        assertThat(consumed.getBeforeQuantity())
-                .isEqualByComparingTo("650");
+        assertThat(consumed.getBeforeQuantity()).isEqualByComparingTo("650");
 
-        assertThat(consumed.getChangeQuantity())
-                .isEqualByComparingTo("-100");
+        assertThat(consumed.getChangeQuantity()).isEqualByComparingTo("-100");
 
-        assertThat(consumed.getAfterQuantity())
-                .isEqualByComparingTo("550");
+        assertThat(consumed.getAfterQuantity()).isEqualByComparingTo("550");
 
-        assertThat(consumed.getChangeAccuracy())
-                .isEqualTo(QuantityAccuracy.EXACT);
+        assertThat(consumed.getChangeAccuracy()).isEqualTo(QuantityAccuracy.EXACT);
 
-        assertThat(consumed.getAfterAccuracy())
-                .isEqualTo(QuantityAccuracy.ESTIMATED);
+        assertThat(consumed.getAfterAccuracy()).isEqualTo(QuantityAccuracy.ESTIMATED);
     }
 
     @Test
@@ -305,14 +297,11 @@ class FoodStockServiceIntegrationTest {
                 )
         );
 
-        FoodStock stock = stockRepository.findById(stockId)
-                .orElseThrow();
+        FoodStock stock = stockRepository.findById(stockId).orElseThrow();
 
-        assertThat(stock.getCurrentQuantity())
-                .isEqualByComparingTo("0");
+        assertThat(stock.getCurrentQuantity()).isEqualByComparingTo("0");
 
-        assertThat(stock.getDepletionReason())
-                .isEqualTo(DepletionReason.CONSUMED);
+        assertThat(stock.getDepletionReason()).isEqualTo(DepletionReason.CONSUMED);
 
         assertThat(stock.getDepletedAt()).isNotNull();
 
@@ -352,6 +341,181 @@ class FoodStockServiceIntegrationTest {
         assertThat(historyRepository.findAllByFoodStock_Id(stockId))
                 .hasSize(1);
     }
+
+    @Test
+    @DisplayName("일부 폐기 시 재고와 DISCARDED history 변경")
+    void discard_partial_stock() {
+        Long stockId = foodStockService.register(
+                actor.getId(),
+                command(household.getId(), milk.getId())
+        );
+
+        foodStockService.discard(
+                actor.getId(),
+                new DiscardFoodStockCommand(
+                        household.getId(),
+                        stockId,
+                        new BigDecimal("250"),
+                        QuantityAccuracy.EXACT
+                )
+        );
+
+        FoodStock stock = stockRepository.findById(stockId).orElseThrow();
+
+        assertThat(stock.getCurrentQuantity()).isEqualByComparingTo("400");
+
+        assertThat(stock.getQuantityAccuracy()).isEqualTo(QuantityAccuracy.ESTIMATED);
+
+        assertThat(stock.getDepletedAt()).isNull();
+
+        List<StockHistory> histories =
+                historyRepository.findAllByFoodStock_Id(stockId);
+
+        assertThat(histories).hasSize(2);
+
+        StockHistory discarded = histories.stream()
+                .filter(h->h.getType()==StockHistoryType.DISCARDED)
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(discarded.getBeforeQuantity()).isEqualByComparingTo("650");
+
+        assertThat(discarded.getChangeQuantity()).isEqualByComparingTo("-250");
+
+        assertThat(discarded.getAfterQuantity()).isEqualByComparingTo("400");
+
+        assertThat(discarded.getChangeAccuracy()).isEqualTo(QuantityAccuracy.EXACT);
+
+        assertThat(discarded.getAfterAccuracy()).isEqualTo(QuantityAccuracy.ESTIMATED);
+
+    }
+
+    @Test
+    @DisplayName("전량 폐기 시 DISCARDED 소진 상태")
+    void discard_all_stock() {
+        Long stockId = foodStockService.register(
+                actor.getId(),
+                command(household.getId(), milk.getId())
+        );
+
+        foodStockService.discard(
+                actor.getId(),
+                new DiscardFoodStockCommand(
+                        household.getId(),
+                        stockId,
+                        new BigDecimal("650"),
+                        QuantityAccuracy.EXACT
+                )
+        );
+
+        FoodStock stock = stockRepository.findById(stockId).orElseThrow();
+
+        assertThat(stock.getCurrentQuantity()).isEqualByComparingTo("0");
+
+        assertThat(stock.getDepletionReason()).isEqualTo(DepletionReason.DISCARDED);
+
+        assertThat(stock.getDepletedAt()).isNotNull();
+    }
+
+    // 추정 수량을 정확한 수량으로 보정
+    @Test
+    @DisplayName("보정 전후 정확도가 다른 경우 history 검증")
+    void adjust_stock_to_exact_quantity() {
+        Long stockId = foodStockService.register(
+                actor.getId(),
+                command(household.getId(), milk.getId())
+        );
+
+        foodStockService.adjust(
+                actor.getId(),
+                new AdjustFoodStockCommand(
+                        household.getId(),
+                        stockId,
+                        new BigDecimal("400"),
+                        QuantityAccuracy.EXACT
+                )
+        );
+
+        FoodStock stock = stockRepository.findById(stockId).orElseThrow();
+
+        assertThat(stock.getCurrentQuantity()).isEqualByComparingTo("400");
+
+        assertThat(stock.getQuantityAccuracy()).isEqualTo(QuantityAccuracy.EXACT);
+
+        StockHistory adjusted =
+                historyRepository.findAllByFoodStock_Id(stockId)
+                        .stream()
+                        .filter(h->h.getType()==StockHistoryType.ADJUSTED)
+                        .findFirst()
+                        .orElseThrow();
+
+        assertThat(adjusted.getBeforeQuantity()).isEqualByComparingTo("650");
+
+        assertThat(adjusted.getChangeQuantity()).isEqualByComparingTo("-250");
+
+        assertThat(adjusted.getAfterQuantity()).isEqualByComparingTo("400");
+
+        assertThat(adjusted.getChangeAccuracy()).isEqualTo(QuantityAccuracy.ESTIMATED);
+
+        assertThat(adjusted.getAfterAccuracy()).isEqualTo(QuantityAccuracy.EXACT);
+    }
+
+    @Test
+    @DisplayName("0으로 보정한 재고를 다시 양수로 복구")
+    void adjust_zero_then_restore() {
+        Long stockId = foodStockService.register(
+                actor.getId(),
+                command(household.getId(), milk.getId())
+        );
+
+        // 650 → 0
+        foodStockService.adjust(
+                actor.getId(),
+                new AdjustFoodStockCommand(
+                        household.getId(),
+                        stockId,
+                        BigDecimal.ZERO,
+                        QuantityAccuracy.EXACT
+                )
+        );
+
+        FoodStock depleted = stockRepository.findById(stockId).orElseThrow();
+
+        assertThat(depleted.getDepletionReason()).isEqualTo(DepletionReason.ADJUSTED);
+
+        assertThat(depleted.getDepletedAt()).isNotNull();
+
+        // 0 → 300
+        foodStockService.adjust(
+                actor.getId(),
+                new AdjustFoodStockCommand(
+                        household.getId(),
+                        stockId,
+                        new BigDecimal("300"),
+                        QuantityAccuracy.EXACT
+                )
+        );
+
+        FoodStock restored = stockRepository.findById(stockId).orElseThrow();
+
+        assertThat(restored.getCurrentQuantity()).isEqualByComparingTo("300");
+
+        assertThat(restored.getDepletedAt()).isNull();
+        assertThat(restored.getDepletionReason()).isNull();
+
+        // REGISTERED + ADJUSTED + ADJUSTED
+        assertThat(historyRepository.findAllByFoodStock_Id(stockId)).hasSize(3);
+    }
+
+    // todo: 경계 조건 테스트 2개 추가 (FoodStock 엔티티 단위 테스트에서 이미 검증하긴 함)
+    // Service 통합 테스트에서는 예외 발생 시 DB에 변경이 남지 않는지까지 확인 가능.
+    // 1. 잔량 650ml에서 700ml 폐기 시도
+    // => IllegalArgumentException, 수량 유지, History 추가 없음
+    // 2. adjust(-1) 호출
+    // => IllegalArgumentException, 수량 유지, History 추가 없음
+    // 참고)
+    // 또 권한 검증은 consume(), discard(), adjust()가 동일한 접근 제어 패턴을 사용하므로,
+    // 최소한 다른 가구의 재고를 변경할 수 없는지도 통합 테스트로 하나씩 확인하면 좋다.
 
     // 프라이빗 헬퍼
     private User createUser() {

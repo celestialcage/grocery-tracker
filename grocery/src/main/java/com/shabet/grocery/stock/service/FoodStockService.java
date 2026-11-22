@@ -7,6 +7,7 @@ import com.shabet.grocery.household.domain.Household;
 import com.shabet.grocery.household.repository.HouseholdRepository;
 import com.shabet.grocery.household.service.HouseholdAccessValidator;
 import com.shabet.grocery.stock.domain.FoodStock;
+import com.shabet.grocery.stock.domain.QuantityAccuracy;
 import com.shabet.grocery.stock.domain.StockHistory;
 import com.shabet.grocery.stock.repository.FoodStockRepository;
 import com.shabet.grocery.stock.repository.StockHistoryRepository;
@@ -128,6 +129,97 @@ public class FoodStockService {
         stockHistoryRepository.save(history);
 
         // FoodStockRepository.save(stock)은 호출 안함. Dirty Checking
+    }
+
+    @Transactional
+    public void discard(
+            Long actorUserId,
+            DiscardFoodStockCommand command
+    )  {
+        // todo: consume과 공통 부분은 향후 추출 여부 판단
+        User actor = userRepository.findById(actorUserId)
+                .orElseThrow(() ->
+                        new NoSuchElementException("사용자가 없습니다.")
+                );
+
+        accessValidator.requireMember(
+                command.householdId(),
+                actorUserId
+        );
+
+        FoodStock stock = foodStockRepository
+                .findByIdAndHousehold_Id(
+                        command.stockId(),
+                        command.householdId()
+                )
+                .orElseThrow(() ->
+                        new NoSuchElementException("재고가 없습니다.")
+                );
+
+        BigDecimal beforeQuantity = stock.getCurrentQuantity();
+        Instant occurredAt = Instant.now();
+
+        stock.discard(
+                command.quantity(),
+                command.operationAccuracy(),
+                occurredAt
+        );
+
+        StockHistory history = StockHistory.discarded(
+                stock,
+                actor,
+                beforeQuantity,
+                command.quantity(),
+                command.operationAccuracy(),
+                occurredAt
+        );
+
+        stockHistoryRepository.save(history);
+    }
+
+    @Transactional
+    public void adjust(
+            Long actorUserId,
+            AdjustFoodStockCommand command
+    ) {
+        User actor = userRepository.findById(actorUserId)
+                .orElseThrow(() -> new NoSuchElementException("사용자가 없습니다."));
+
+        accessValidator.requireMember(
+                command.householdId(),
+                actorUserId
+        );
+
+        FoodStock stock = foodStockRepository
+                .findByIdAndHousehold_Id(
+                        command.stockId(),
+                        command.householdId()
+                )
+                .orElseThrow(() -> new NoSuchElementException("재고가 없습니다."));
+
+        // 보정 전 상태를 반드시 보관 (이건.. 의존관계 없는 구조상 그렇지)
+        BigDecimal beforeQuantity = stock.getCurrentQuantity();
+        QuantityAccuracy beforeAccuracy = stock.getQuantityAccuracy();
+
+        Instant occurredAt = Instant.now();
+
+        // stock adjust
+        stock.adjust(
+                command.newQuantity(),
+                command.newAccuracy(),
+                occurredAt
+        );
+
+        // adjust 기록 insert
+        StockHistory history = StockHistory.adjusted(
+                stock,
+                actor,
+                beforeQuantity,
+                beforeAccuracy,
+                occurredAt
+        );
+
+        stockHistoryRepository.save(history);
     }
 
     private void validateAvailableFood(Food food, Household household) {
