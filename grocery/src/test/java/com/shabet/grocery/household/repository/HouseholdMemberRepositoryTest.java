@@ -63,4 +63,8 @@ class HouseholdMemberRepositoryTest {
 
         assertThat(exists).isTrue();
     }
+
+    // todo: 존재하지 않을 때 false 반환하는 테스트
+
+    // todo: (household_id, user_id) 중복 등록 시 유니크 제약조건 위반 발생 테스트
 }

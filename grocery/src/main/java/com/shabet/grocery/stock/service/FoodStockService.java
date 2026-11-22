@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -74,6 +75,59 @@ public class FoodStockService {
         stockHistoryRepository.save(history);
 
         return savedStock.getId();
+    }
+
+    @Transactional
+    public void consume(Long actorUserId, ConsumeFoodStockCommand command) {
+
+        // 1. 작업자 확인
+        User actor = userRepository.findById(actorUserId)
+                .orElseThrow(()->
+                        new NoSuchElementException("사용자가 없습니다.")
+                );
+
+        // 2. household 구성원 확인
+        accessValidator.requireMember(
+                command.householdId(),
+                actorUserId
+        );
+
+        // 3. 해당 household의 재고 조회
+        FoodStock stock = foodStockRepository
+                .findByIdAndHousehold_Id(
+                        command.stockId(),
+                        command.householdId()
+                )
+                .orElseThrow(()->
+                        new NoSuchElementException("재고가 없습니다.")
+                );
+
+        // 4. 변경 이전 수량 저장
+        BigDecimal beforeQuantity = stock.getCurrentQuantity();
+
+        Instant occurredAt = Instant.now();
+
+        // 5. 도메인 행위 실행
+        stock.consume(
+                command.quantity(),
+                command.operationAccuracy(),
+                occurredAt
+        );
+
+        // 6. 변경 이력 생성
+        StockHistory history = StockHistory.consumed(
+                stock,
+                actor,
+                beforeQuantity,
+                command.quantity(),
+                command.operationAccuracy(),
+                occurredAt
+        );
+
+        // 7. 이력 저장
+        stockHistoryRepository.save(history);
+
+        // FoodStockRepository.save(stock)은 호출 안함. Dirty Checking
     }
 
     private void validateAvailableFood(Food food, Household household) {
