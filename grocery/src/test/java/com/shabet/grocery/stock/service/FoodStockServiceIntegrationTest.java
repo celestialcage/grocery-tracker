@@ -655,10 +655,10 @@ class FoodStockServiceIntegrationTest {
     @Test
     @DisplayName("상세 조회 시 Food 이름, 카테고리, 재고 수량, 소비 기한이 정확한지 확인")
     void get_detail_works_properly() {
-        Long stockId = foodStockService.register(
-                actor.getId(),
-                command(household.getId(), milk.getId())
-        );
+        RegisterFoodStockCommand cmd =
+                command(household.getId(), milk.getId());
+
+        Long stockId = foodStockService.register(actor.getId(), cmd);
 
         FoodStock stock = stockRepository.findById(stockId).orElseThrow();
 
@@ -666,15 +666,12 @@ class FoodStockServiceIntegrationTest {
                 actor.getId(), household.getId(), stockId
         );
 
-        assertThat(response.foodName()).isEqualTo(
-                stock.getFood().getName()
-        );
+        // 테스트의 입력값을 기대값으로 활용하자
+        assertThat(response.stockId()).isEqualTo(stockId);
+        assertThat(response.foodName()).isEqualTo(milk.getName());
+        assertThat(response.foodCategory()).isEqualTo(milk.getCategory());
 
-        assertThat(response.foodCategory()).isEqualTo(
-                stock.getFood().getCategory()
-        );
-
-        assertThat(response.currentQuantity()).isEqualTo(
+        assertThat(response.currentQuantity()).isEqualByComparingTo(
                 stock.getCurrentQuantity()
         );
 
@@ -765,6 +762,10 @@ class FoodStockServiceIntegrationTest {
         FoodStockDetailResponse response = foodStockService.getDetail(
                 actor.getId(), household.getId(), stockId
         );
+
+        assertThat(response.currentQuantity()).isEqualByComparingTo(BigDecimal.ZERO);
+
+        assertThat(response.depletionReason()).isEqualTo(DepletionReason.ADJUSTED);
 
         assertThat(response.depletionReason()).isNotNull();
     }
