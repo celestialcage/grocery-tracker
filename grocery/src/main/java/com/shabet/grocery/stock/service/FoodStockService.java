@@ -37,8 +37,7 @@ public class FoodStockService {
     @Transactional
     public Long register(Long actorUserId, RegisterFoodStockCommand command) {
 
-        User actor = userRepository.findById(actorUserId)
-                .orElseThrow(() -> new NoSuchElementException("사용자가 없습니다."));
+        User actor = findActor(actorUserId);
 
         Household household = householdRepository.findById(command.householdId())
                 .orElseThrow(() -> new NoSuchElementException("가구가 없습니다."));
@@ -82,26 +81,11 @@ public class FoodStockService {
     public void consume(Long actorUserId, ConsumeFoodStockCommand command) {
 
         // 1. 작업자 확인
-        User actor = userRepository.findById(actorUserId)
-                .orElseThrow(()->
-                        new NoSuchElementException("사용자가 없습니다.")
-                );
+        User actor = findActor(actorUserId);
 
         // 2. household 구성원 확인
-        accessValidator.requireMember(
-                command.householdId(),
-                actorUserId
-        );
-
         // 3. 해당 household의 재고 조회
-        FoodStock stock = foodStockRepository
-                .findByIdAndHousehold_Id(
-                        command.stockId(),
-                        command.householdId()
-                )
-                .orElseThrow(()->
-                        new NoSuchElementException("재고가 없습니다.")
-                );
+        FoodStock stock = findAccessibleStock(actorUserId, command.householdId(), command.stockId());
 
         // 4. 변경 이전 수량 저장
         BigDecimal beforeQuantity = stock.getCurrentQuantity();
@@ -137,24 +121,9 @@ public class FoodStockService {
             DiscardFoodStockCommand command
     )  {
         // todo: consume과 공통 부분은 향후 추출 여부 판단
-        User actor = userRepository.findById(actorUserId)
-                .orElseThrow(() ->
-                        new NoSuchElementException("사용자가 없습니다.")
-                );
+        User actor = findActor(actorUserId);
 
-        accessValidator.requireMember(
-                command.householdId(),
-                actorUserId
-        );
-
-        FoodStock stock = foodStockRepository
-                .findByIdAndHousehold_Id(
-                        command.stockId(),
-                        command.householdId()
-                )
-                .orElseThrow(() ->
-                        new NoSuchElementException("재고가 없습니다.")
-                );
+        FoodStock stock = findAccessibleStock(actorUserId, command.householdId(), command.stockId());
 
         BigDecimal beforeQuantity = stock.getCurrentQuantity();
         Instant occurredAt = Instant.now();
@@ -182,20 +151,9 @@ public class FoodStockService {
             Long actorUserId,
             AdjustFoodStockCommand command
     ) {
-        User actor = userRepository.findById(actorUserId)
-                .orElseThrow(() -> new NoSuchElementException("사용자가 없습니다."));
+        User actor = findActor(actorUserId);
 
-        accessValidator.requireMember(
-                command.householdId(),
-                actorUserId
-        );
-
-        FoodStock stock = foodStockRepository
-                .findByIdAndHousehold_Id(
-                        command.stockId(),
-                        command.householdId()
-                )
-                .orElseThrow(() -> new NoSuchElementException("재고가 없습니다."));
+        FoodStock stock = findAccessibleStock(actorUserId, command.householdId(), command.stockId());
 
         // 보정 전 상태를 반드시 보관 (이건.. 의존관계 없는 구조상 그렇지)
         BigDecimal beforeQuantity = stock.getCurrentQuantity();
@@ -227,20 +185,9 @@ public class FoodStockService {
             Long actorUserId,
             OpenFoodStockCommand command
     ) {
-        User actor = userRepository.findById(actorUserId)
-                .orElseThrow(() -> new NoSuchElementException("사용자가 없습니다."));
+        User actor = findActor(actorUserId);
 
-        accessValidator.requireMember(
-                command.householdId(),
-                actorUserId
-        );
-
-        FoodStock stock = foodStockRepository
-                .findByIdAndHousehold_Id(
-                        command.stockId(),
-                        command.householdId()
-                )
-                .orElseThrow(() -> new NoSuchElementException("재고가 없습니다."));
+        FoodStock stock = findAccessibleStock(actorUserId, command.householdId(), command.stockId());
 
         Instant openedAt = Instant.now();
 
@@ -269,5 +216,26 @@ public class FoodStockService {
                 throw new SecurityException("다른 가구의 사용자 식품은 등록할 수 없습니다.");
             }
         }
+    }
+
+    private User findActor(Long actorUserId) {
+        return userRepository.findById(actorUserId)
+                .orElseThrow(()->
+                        new NoSuchElementException("사용자가 없습니다.")
+                );
+    }
+
+    private FoodStock findAccessibleStock(
+            Long actorUserId,
+            Long householdId,
+            Long stockId
+    ) {
+        accessValidator.requireMember(
+                householdId, actorUserId
+        );
+
+        return foodStockRepository
+                .findByIdAndHousehold_Id(stockId, householdId)
+                .orElseThrow(() -> new NoSuchElementException("재고가 없습니다."));
     }
 }
