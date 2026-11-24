@@ -10,6 +10,7 @@ import com.shabet.grocery.stock.domain.FoodStock;
 import com.shabet.grocery.stock.domain.QuantityAccuracy;
 import com.shabet.grocery.stock.domain.StockHistory;
 import com.shabet.grocery.stock.dto.FoodStockDetailResponse;
+import com.shabet.grocery.stock.dto.FoodStockListResponse;
 import com.shabet.grocery.stock.repository.FoodStockRepository;
 import com.shabet.grocery.stock.repository.StockHistoryRepository;
 import com.shabet.grocery.user.domain.User;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
@@ -214,6 +216,18 @@ public class FoodStockService {
         FoodStock stock = findAccessibleStock(actorUserId, householdId, stockId);
 
         return FoodStockDetailResponse.from(stock);
+    }
+
+    // 목록 조회
+    @Transactional(readOnly = true)
+    public List<FoodStockListResponse> getList(Long actorUserId, Long householdId) {
+        accessValidator.requireMember(householdId, actorUserId);
+
+        return foodStockRepository
+                .findAllByHousehold_IdOrderByIdDesc(householdId)
+                .stream()
+                .map(FoodStockListResponse::from)
+                .toList();
     }
 
     private void validateAvailableFood(Food food, Household household) {

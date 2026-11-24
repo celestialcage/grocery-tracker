@@ -14,6 +14,7 @@ import com.shabet.grocery.household.repository.HouseholdMemberRepository;
 import com.shabet.grocery.household.repository.HouseholdRepository;
 import com.shabet.grocery.stock.domain.*;
 import com.shabet.grocery.stock.dto.FoodStockDetailResponse;
+import com.shabet.grocery.stock.dto.FoodStockListResponse;
 import com.shabet.grocery.stock.repository.FoodStockRepository;
 import com.shabet.grocery.stock.repository.StockHistoryRepository;
 import com.shabet.grocery.user.domain.User;
@@ -768,6 +769,71 @@ class FoodStockServiceIntegrationTest {
         assertThat(response.depletionReason()).isEqualTo(DepletionReason.ADJUSTED);
 
         assertThat(response.depletionReason()).isNotNull();
+    }
+
+    // 리스트 조회? 우유, 계란, 두부
+    @Test
+    @DisplayName("식품 재고 리스트 조회")
+    void get_list_different_foods() {
+        Food egg = foodRepository.save(
+                Food.createSystem(
+                        "계란",
+                        FoodCategory.EGG,
+                        QuantityType.COUNT,
+                        StockUnit.EA
+                )
+        );
+
+        Food dubu = foodRepository.save(
+                Food.createSystem(
+                        "두부",
+                        FoodCategory.ETC, // 무슨 카테고리가 적합한지 고민...
+                        QuantityType.PORTION,
+                        StockUnit.BLOCK
+                )
+        );
+
+        Long milkStockId = foodStockService.register(
+                actor.getId(), command(household.getId(), milk.getId())
+        );
+
+        Long eggStockId = foodStockService.register(
+                actor.getId(), new RegisterFoodStockCommand(
+                        household.getId(),
+                        egg.getId(),
+                        new BigDecimal("30"),
+                        new BigDecimal("30"),
+                        StockUnit.EA,
+                        QuantityAccuracy.EXACT,
+                        LocalDate.of(2026, 11, 24),
+                        LocalDate.of(2026, 12, 10),
+                        StorageType.REFRIGERATED,
+                        AcquisitionType.PURCHASED,
+                        "초록농장 계란",
+                        "사온 계란 한 판"
+                )
+        );
+
+        Long dubuStockId = foodStockService.register(
+                actor.getId(), new RegisterFoodStockCommand(
+                        household.getId(),
+                        dubu.getId(),
+                        new BigDecimal("1"),
+                        new BigDecimal("0.5"),
+                        StockUnit.BLOCK,
+                        QuantityAccuracy.ESTIMATED,
+                        LocalDate.of(2026, 11, 24),
+                        LocalDate.of(2026, 11, 28),
+                        StorageType.REFRIGERATED,
+                        AcquisitionType.EXISTING,
+                        "풀무원 두부",
+                        "반모 남은 두부"
+                )
+        );
+
+        List<FoodStockListResponse> stockList = foodStockService.getList(actor.getId(), household.getId());
+
+        assertThat(stockList.size()).isEqualTo(3);
     }
 
     // 프라이빗 헬퍼
