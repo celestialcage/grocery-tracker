@@ -661,7 +661,7 @@ class FoodStockServiceIntegrationTest {
 
         Long stockId = foodStockService.register(actor.getId(), cmd);
 
-        FoodStock stock = stockRepository.findById(stockId).orElseThrow();
+//        FoodStock stock = stockRepository.findById(stockId).orElseThrow();
 
         FoodStockDetailResponse response = foodStockService.getDetail(
                 actor.getId(), household.getId(), stockId
@@ -673,11 +673,13 @@ class FoodStockServiceIntegrationTest {
         assertThat(response.foodCategory()).isEqualTo(milk.getCategory());
 
         assertThat(response.currentQuantity()).isEqualByComparingTo(
-                stock.getCurrentQuantity()
+//                stock.getCurrentQuantity()
+                cmd.currentQuantity()
         );
 
         assertThat(response.expiresAt()).isEqualTo(
-                stock.getExpiresAt()
+//                stock.getExpiresAt()
+                cmd.expiresAt()
         );
     }
 
@@ -834,6 +836,120 @@ class FoodStockServiceIntegrationTest {
         List<FoodStockListResponse> stockList = foodStockService.getList(actor.getId(), household.getId());
 
         assertThat(stockList.size()).isEqualTo(3);
+
+        // 목록에 정확한 재고가 포함되고 ID 내림차순인지 확인(id 내림차순도...?)
+        // 순서 중요하지 않으면 containsExactlyInAnyOrder()도 사용 가능.
+        assertThat(stockList)
+                .extracting(FoodStockListResponse::stockId)
+                .containsExactly(dubuStockId, eggStockId, milkStockId);
+
+        // 두부 정보 검증
+        FoodStockListResponse dubuResponse = stockList.get(0);
+
+        assertThat(dubuResponse.foodName()).isEqualTo("두부");
+        assertThat(dubuResponse.currentQuantity()).isEqualByComparingTo("0.5");
+        assertThat(dubuResponse.quantityAccuracy()).isEqualTo(QuantityAccuracy.ESTIMATED);
+        assertThat(dubuResponse.expiresAt()).isEqualTo(LocalDate.of(2026, 11, 28));
+
+        // 계란 정보 검증
+        FoodStockListResponse eggResponse = stockList.get(1);
+
+        assertThat(eggResponse.foodCategory()).isEqualTo(FoodCategory.EGG);
+        assertThat(eggResponse.currentQuantity()).isEqualByComparingTo("30");
+    }
+
+    // 다른 집 데이터 노출 방지
+    @Test
+    @DisplayName("목록 조회 시 다른 Household 재고는 제외")
+    void get_list_only_own_household() {
+        // given
+        Household otherHousehold = householdRepository.save(
+                new Household("별도 가구")
+        );
+
+        memberRepository.save(
+                new HouseholdMember(
+                        actor,
+                        otherHousehold,
+                        HouseholdRole.OWNER,
+                        Instant.now()
+                )
+        );
+
+        Long ownStockId = foodStockService.register(
+                actor.getId(), command(household.getId(), milk.getId())
+        );
+
+        Long otherStockId = foodStockService.register(
+                actor.getId(),
+                command(otherHousehold.getId(), milk.getId())
+        );
+
+        // when
+        List<FoodStockListResponse> result = foodStockService.getList(
+                actor.getId(), household.getId()
+        );
+
+        // then
+        assertThat(result)
+                .extracting(FoodStockListResponse::stockId)
+                .containsExactly(ownStockId)
+                .doesNotContain(otherStockId);
+    }
+
+    @Test
+    @DisplayName("비구성원은 재고 목록 조회 불가")
+    void outsider_cannot_get_stock_list() {
+        // given
+        User outsider = createUser();
+
+        // when & then
+        assertThatThrownBy(() ->
+                foodStockService.getList(outsider.getId(), household.getId())
+        ).isInstanceOf(SecurityException.class);
+    }
+
+    @Test
+    @DisplayName("재고가 없는 household에서는 빈 목록 반환")
+    void get_empty_stock_list() {
+        // when
+        List<FoodStockListResponse> result = foodStockService.getList(
+                actor.getId(), household.getId()
+        );
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("소진된 재고도 목록 조회에 포함")
+    void get_list_includes_depleted_stock() {
+        // given
+        Long stockId = foodStockService.register(
+                actor.getId(), command(household.getId(), milk.getId())
+        );
+
+        foodStockService.adjust(
+                actor.getId(),
+                new AdjustFoodStockCommand(
+                        household.getId(),
+                        stockId,
+                        BigDecimal.ZERO,
+                        QuantityAccuracy.EXACT
+                )
+        );
+
+        // when
+        List<FoodStockListResponse> result = foodStockService.getList(
+                actor.getId(), household.getId()
+        );
+
+        // then
+        // singleElement - 리스트에 정확히 하나의 요소가 있어야 한다고 검증.
+        assertThat(result).singleElement().satisfies(stock -> {
+            assertThat(stock.stockId()).isEqualTo(stockId);
+            assertThat(stock.currentQuantity()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(stock.depletedAt()).isNotNull();
+        });
     }
 
     // 프라이빗 헬퍼
