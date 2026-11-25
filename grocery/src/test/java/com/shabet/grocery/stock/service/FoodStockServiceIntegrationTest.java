@@ -15,6 +15,7 @@ import com.shabet.grocery.household.repository.HouseholdRepository;
 import com.shabet.grocery.stock.domain.*;
 import com.shabet.grocery.stock.dto.FoodStockDetailResponse;
 import com.shabet.grocery.stock.dto.FoodStockListResponse;
+import com.shabet.grocery.stock.dto.FoodStockSearchCondition;
 import com.shabet.grocery.stock.repository.FoodStockRepository;
 import com.shabet.grocery.stock.repository.StockHistoryRepository;
 import com.shabet.grocery.user.domain.User;
@@ -1014,7 +1015,15 @@ class FoodStockServiceIntegrationTest {
 
         // when
         List<FoodStockListResponse> result =
-                foodStockService.search(actor.getId(), household.getId(), "우유");
+                foodStockService.search(
+                        actor.getId(),
+                        household.getId(),
+                        new FoodStockSearchCondition(
+                                "우유",
+                                null,
+                                null
+                        )
+                );
 
         // then
         assertThat(result).singleElement().satisfies(stock -> {
@@ -1086,7 +1095,15 @@ class FoodStockServiceIntegrationTest {
 
         // when
         List<FoodStockListResponse> result =
-                foodStockService.search(actor.getId(), household.getId(), "풀무원");
+                foodStockService.search(
+                        actor.getId(),
+                        household.getId(),
+                        new FoodStockSearchCondition(
+                                "풀무원",
+                                null,
+                                null
+                        )
+                );
 
         // then
         assertThat(result).singleElement().satisfies(stock -> {
@@ -1159,7 +1176,7 @@ class FoodStockServiceIntegrationTest {
 
         // when
         List<FoodStockListResponse> result =
-                foodStockService.search(actor.getId(), household.getId(), null);
+                foodStockService.search(actor.getId(), household.getId(), new FoodStockSearchCondition(null, null, null));
 
         // then
         assertThat(result.size()).isEqualTo(3);
@@ -1210,7 +1227,7 @@ class FoodStockServiceIntegrationTest {
 
         // when
         List<FoodStockListResponse> result =
-                foodStockService.search(actor.getId(), household.getId(), null);
+                foodStockService.search(actor.getId(), household.getId(), new FoodStockSearchCondition(null, null, null));
 
         // then
         assertThat(result)
@@ -1231,7 +1248,7 @@ class FoodStockServiceIntegrationTest {
         ).isInstanceOf(SecurityException.class);
     }
 
-    // 프라이빗 헬퍼
+    // ===== 프라이빗 헬퍼 =====
     private User createUser() {
         return userRepository.save(
                 new User(
@@ -1261,4 +1278,57 @@ class FoodStockServiceIntegrationTest {
         );
     }
 
+    /** 기본 우유 재고 등록 (1000ml 중 650ml 남음, ESTIMATED) */
+    private Long registerMilk() {
+        return foodStockService.register(actor.getId(), command(household.getId(), milk.getId()));
+    }
+
+    /** 검색처럼 식품·상품명만 중요한 테스트용 */
+    private Long registerStock(Food food, String productLabel) {
+        return foodStockService.register(
+                actor.getId(),
+                new RegisterFoodStockCommand(
+                        household.getId(), food.getId(),
+                        new BigDecimal("10"), new BigDecimal("10"),
+                        food.getDefaultUnit(),
+                        QuantityAccuracy.EXACT,
+                        LocalDate.of(2026, 11, 24),
+                        LocalDate.of(2026, 12, 1),
+                        StorageType.REFRIGERATED,
+                        AcquisitionType.PURCHASED,
+                        productLabel, null
+                )
+        );
+    }
+
+    private FoodStock reload(Long stockId) {
+        return stockRepository.findById(stockId).orElseThrow();
+    }
+
+    private List<StockHistory> histories(Long stockId) {
+        return historyRepository.findAllByFoodStock_Id(stockId);
+    }
+
+    private StockHistory historyOf(Long stockId, StockHistoryType type) {
+        return histories(stockId).stream()
+                .filter(h -> h.getType() == type)
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private Food saveSystemFood(
+            String name,
+            FoodCategory category,
+            QuantityType qt,
+            StockUnit unit
+    ) {
+        return foodRepository.save(Food.createSystem(name, category, qt, unit));
+    }
+
+    /** 다른 사용자가 OWNER인 다른 가구 */
+    private Household createOtherHousehold(User owner) {
+        Household other = householdRepository.save(new Household("다른 집"));
+        memberRepository.save(new HouseholdMember(owner, other, HouseholdRole.OWNER, Instant.now()));
+        return other;
+    }
 }

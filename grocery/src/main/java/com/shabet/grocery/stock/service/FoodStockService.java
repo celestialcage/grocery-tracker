@@ -11,6 +11,7 @@ import com.shabet.grocery.stock.domain.QuantityAccuracy;
 import com.shabet.grocery.stock.domain.StockHistory;
 import com.shabet.grocery.stock.dto.FoodStockDetailResponse;
 import com.shabet.grocery.stock.dto.FoodStockListResponse;
+import com.shabet.grocery.stock.dto.FoodStockSearchCondition;
 import com.shabet.grocery.stock.repository.FoodStockRepository;
 import com.shabet.grocery.stock.repository.StockHistoryRepository;
 import com.shabet.grocery.user.domain.User;
@@ -235,11 +236,13 @@ public class FoodStockService {
     public List<FoodStockListResponse> search(
             Long actorUserId,
             Long householdId,
-            String keyword
+            FoodStockSearchCondition condition
     ) {
         accessValidator.requireMember(householdId, actorUserId);
 
-        return foodStockRepository.search(householdId, keyword)
+        Objects.requireNonNull(condition, "검색 조건 객체는 필수입니다.");
+
+        return foodStockRepository.search(householdId, condition)
                 .stream()
                 .map(FoodStockListResponse::from)
                 .toList();

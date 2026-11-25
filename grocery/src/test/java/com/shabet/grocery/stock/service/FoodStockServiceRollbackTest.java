@@ -54,6 +54,7 @@ class FoodStockServiceRollbackTest {
     @MockitoBean
     StockHistoryRepository historyRepository;
 
+    // doAnswer 이거는 실무에서도 잘 안하는 수준이라고 함.
     @Test
     @DisplayName("기록 실패 시 stock까지 롤백하는지 트랜잭션 확인")
     void history_save_failure_rolls_back_stock() {
