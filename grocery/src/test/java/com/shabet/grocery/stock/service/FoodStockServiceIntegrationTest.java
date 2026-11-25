@@ -964,18 +964,27 @@ class FoodStockServiceIntegrationTest {
 
         Food egg;
         Food dubu;
+        Food froYo;
         Long milkStockId;
         Long eggStockId;
         Long dubuStockId;
+        Long froYoStockId;
 
         @BeforeEach
         void setUpStocks() {
             egg = saveSystemFood("계란", FoodCategory.EGG, QuantityType.COUNT, StockUnit.EA);
             dubu = saveSystemFood("두부", FoodCategory.ETC, QuantityType.PORTION, StockUnit.BLOCK);
+            froYo = saveSystemFood(
+                    "프로즌 요거트",
+                    FoodCategory.DAIRY,
+                    QuantityType.VOLUME,
+                    StockUnit.ML
+            );
 
             milkStockId = registerStock(milk, "매일우유");
             eggStockId = registerStock(egg, "초록농장 계란");
             dubuStockId = registerStock(dubu, "풀무원 두부");
+            froYoStockId = registerStock(froYo, null, StorageType.FROZEN);
         }
 
         @Test
@@ -1017,7 +1026,7 @@ class FoodStockServiceIntegrationTest {
 
             assertThat(result)
                     .extracting(FoodStockListResponse::stockId)
-                    .containsExactlyInAnyOrder(milkStockId, eggStockId, dubuStockId);
+                    .containsExactlyInAnyOrder(milkStockId, eggStockId, dubuStockId, froYoStockId);
         }
 
         @Test
@@ -1055,306 +1064,77 @@ class FoodStockServiceIntegrationTest {
             ).isInstanceOf(SecurityException.class);
         }
 
-    }
+        // 검색 조건 확장
+        @Test
+        @DisplayName("카테고리가 DAIRY인 재고만 조회")
+        void search_by_category() {
+            List<FoodStockListResponse> result = foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition(null, FoodCategory.DAIRY, null)
+            );
 
-    // 좀 더 간결하게 필요한 것만 테스트하게 Search 안에 바꿔씀
-    @Test
-    @DisplayName("식품명 우유로 검색 시 우유 재고 반환")
-    void search_food_name_milk() {
-        // given - 세가지 식품
-        Food egg = foodRepository.save(
-                Food.createSystem(
-                        "계란",
-                        FoodCategory.EGG,
-                        QuantityType.COUNT,
-                        StockUnit.EA
-                )
-        );
+            assertThat(result)
+                    .extracting(FoodStockListResponse::stockId)
+                    .containsExactlyInAnyOrder(milkStockId, froYoStockId);
+        }
 
-        Food dubu = foodRepository.save(
-                Food.createSystem(
-                        "두부",
-                        FoodCategory.ETC,
-                        QuantityType.PORTION,
-                        StockUnit.BLOCK
-                )
-        );
+        @Test
+        @DisplayName("보관 방식이 FROZEN인 재고만 조회")
+        void search_by_storage_type() {
 
-        Long milkStockId = foodStockService.register(
-                actor.getId(), command(household.getId(), milk.getId())
-        );
+            // given - 이너 클래스 BeforeEach로 다 처리함
 
-        Long eggStockId = foodStockService.register(
-                actor.getId(), new RegisterFoodStockCommand(
-                        household.getId(),
-                        egg.getId(),
-                        new BigDecimal("30"),
-                        new BigDecimal("30"),
-                        StockUnit.EA,
-                        QuantityAccuracy.EXACT,
-                        LocalDate.of(2026, 11, 24),
-                        LocalDate.of(2026, 12, 10),
-                        StorageType.REFRIGERATED,
-                        AcquisitionType.PURCHASED,
-                        "초록농장 계란",
-                        "사온 계란 한 판"
-                )
-        );
+            // when
+            List<FoodStockListResponse> result = foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition(null, null, StorageType.FROZEN)
+            );
 
-        Long dubuStockId = foodStockService.register(
-                actor.getId(), new RegisterFoodStockCommand(
-                        household.getId(),
-                        dubu.getId(),
-                        new BigDecimal("1"),
-                        new BigDecimal("0.5"),
-                        StockUnit.BLOCK,
-                        QuantityAccuracy.ESTIMATED,
-                        LocalDate.of(2026, 11, 24),
-                        LocalDate.of(2026, 11, 28),
-                        StorageType.REFRIGERATED,
-                        AcquisitionType.EXISTING,
-                        "풀무원 두부",
-                        "반모 남은 두부"
-                )
-        );
+            // then
+            assertThat(result)
+                    .extracting(FoodStockListResponse::stockId)
+                    .containsExactly(froYoStockId);
+        }
 
-        // when
-        List<FoodStockListResponse> result =
-                foodStockService.search(
-                        actor.getId(),
-                        household.getId(),
-                        new FoodStockSearchCondition(
-                                "우유",
-                                null,
-                                null
-                        )
-                );
+        @Test
+        @DisplayName("DAIRY + REFRIGERATED 조합 조회")
+        void search_by_food_category_and_storage_type() {
+            List<FoodStockListResponse> result = foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition(null, FoodCategory.DAIRY, StorageType.REFRIGERATED)
+            );
 
-        // then
-        assertThat(result).singleElement().satisfies(stock -> {
-            assertThat(stock.stockId()).isEqualTo(milkStockId);
-            assertThat(stock.currentQuantity()).isEqualByComparingTo("650");
-            assertThat(stock.foodName()).isEqualTo("우유");
-        });
-    }
+            assertThat(result)
+                    .extracting(FoodStockListResponse::stockId)
+                    .containsExactly(milkStockId);
+        }
 
-    // 좀 더 간결하게 필요한 것만 테스트하게 Search 안에 바꿔씀
-    @Test
-    @DisplayName("상품명 풀무원으로 검색 시 두부 재고 반환")
-    void search_product_name_dubu() {
-        // given
-        Food egg = foodRepository.save(
-                Food.createSystem(
-                        "계란",
-                        FoodCategory.EGG,
-                        QuantityType.COUNT,
-                        StockUnit.EA
-                )
-        );
+        @Test
+        @DisplayName("키워드 + 카테고리 + 보관방식 모두 조합해 검색")
+        void search_by_keyword_food_category_and_storage_type() {
+            List<FoodStockListResponse> result = foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition("매일", FoodCategory.DAIRY, StorageType.REFRIGERATED)
+            );
 
-        Food dubu = foodRepository.save(
-                Food.createSystem(
-                        "두부",
-                        FoodCategory.ETC,
-                        QuantityType.PORTION,
-                        StockUnit.BLOCK
-                )
-        );
+            assertThat(result)
+                    .extracting(FoodStockListResponse::stockId)
+                    .containsExactly(milkStockId);
+        }
 
-        Long milkStockId = foodStockService.register(
-                actor.getId(), command(household.getId(), milk.getId())
-        );
+        @Test
+        @DisplayName("모든 검색 조건이 null이면 household 전체 재고 조회")
+        void search_with_no_condition() {
+            List<FoodStockListResponse> result = foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition(null, null, null)
+            );
 
-        Long eggStockId = foodStockService.register(
-                actor.getId(), new RegisterFoodStockCommand(
-                        household.getId(),
-                        egg.getId(),
-                        new BigDecimal("30"),
-                        new BigDecimal("30"),
-                        StockUnit.EA,
-                        QuantityAccuracy.EXACT,
-                        LocalDate.of(2026, 11, 24),
-                        LocalDate.of(2026, 12, 10),
-                        StorageType.REFRIGERATED,
-                        AcquisitionType.PURCHASED,
-                        "초록농장 계란",
-                        "사온 계란 한 판"
-                )
-        );
+            assertThat(result)
+            .extracting(FoodStockListResponse::stockId)
+                    .containsExactlyInAnyOrder(milkStockId, froYoStockId, dubuStockId, eggStockId);
+        }
 
-        Long dubuStockId = foodStockService.register(
-                actor.getId(), new RegisterFoodStockCommand(
-                        household.getId(),
-                        dubu.getId(),
-                        new BigDecimal("1"),
-                        new BigDecimal("0.5"),
-                        StockUnit.BLOCK,
-                        QuantityAccuracy.ESTIMATED,
-                        LocalDate.of(2026, 11, 24),
-                        LocalDate.of(2026, 11, 28),
-                        StorageType.REFRIGERATED,
-                        AcquisitionType.EXISTING,
-                        "풀무원 두부",
-                        "반모 남은 두부"
-                )
-        );
-
-        // when
-        List<FoodStockListResponse> result =
-                foodStockService.search(
-                        actor.getId(),
-                        household.getId(),
-                        new FoodStockSearchCondition(
-                                "풀무원",
-                                null,
-                                null
-                        )
-                );
-
-        // then
-        assertThat(result).singleElement().satisfies(stock -> {
-            assertThat(stock.stockId()).isEqualTo(dubuStockId);
-            assertThat(stock.currentQuantity()).isEqualByComparingTo("0.5");
-            assertThat(stock.foodName()).isEqualTo("두부");
-            assertThat(stock.productLabel()).isEqualTo("풀무원 두부");
-        });
-    }
-
-    // 좀 더 간결하게 필요한 것만 테스트하게 Search 안에 바꿔씀
-    @Test
-    @DisplayName("검색어가 null이나 공백이면 household 전체 재고 반환")
-    void search_null_or_blank() {
-        // given
-        Food egg = foodRepository.save(
-                Food.createSystem(
-                        "계란",
-                        FoodCategory.EGG,
-                        QuantityType.COUNT,
-                        StockUnit.EA
-                )
-        );
-
-        Food dubu = foodRepository.save(
-                Food.createSystem(
-                        "두부",
-                        FoodCategory.ETC,
-                        QuantityType.PORTION,
-                        StockUnit.BLOCK
-                )
-        );
-
-        Long milkStockId = foodStockService.register(
-                actor.getId(), command(household.getId(), milk.getId())
-        );
-
-        Long eggStockId = foodStockService.register(
-                actor.getId(), new RegisterFoodStockCommand(
-                        household.getId(),
-                        egg.getId(),
-                        new BigDecimal("30"),
-                        new BigDecimal("30"),
-                        StockUnit.EA,
-                        QuantityAccuracy.EXACT,
-                        LocalDate.of(2026, 11, 24),
-                        LocalDate.of(2026, 12, 10),
-                        StorageType.REFRIGERATED,
-                        AcquisitionType.PURCHASED,
-                        "초록농장 계란",
-                        "사온 계란 한 판"
-                )
-        );
-
-        Long dubuStockId = foodStockService.register(
-                actor.getId(), new RegisterFoodStockCommand(
-                        household.getId(),
-                        dubu.getId(),
-                        new BigDecimal("1"),
-                        new BigDecimal("0.5"),
-                        StockUnit.BLOCK,
-                        QuantityAccuracy.ESTIMATED,
-                        LocalDate.of(2026, 11, 24),
-                        LocalDate.of(2026, 11, 28),
-                        StorageType.REFRIGERATED,
-                        AcquisitionType.EXISTING,
-                        "풀무원 두부",
-                        "반모 남은 두부"
-                )
-        );
-
-        // when
-        List<FoodStockListResponse> result =
-                foodStockService.search(actor.getId(), household.getId(), new FoodStockSearchCondition(null, null, null));
-
-        // then
-        assertThat(result.size()).isEqualTo(3);
-
-        assertThat(result)
-                .extracting(FoodStockListResponse::stockId)
-                .containsExactly(dubuStockId, eggStockId, milkStockId);
-
-        FoodStockListResponse dubuResponse = result.get(0);
-
-        assertThat(dubuResponse.foodName()).isEqualTo("두부");
-        assertThat(dubuResponse.currentQuantity()).isEqualByComparingTo("0.5");
-        assertThat(dubuResponse.quantityAccuracy()).isEqualTo(QuantityAccuracy.ESTIMATED);
-        assertThat(dubuResponse.expiresAt()).isEqualTo(LocalDate.of(2026, 11, 28));
-
-        FoodStockListResponse eggResponse = result.get(1);
-
-        assertThat(eggResponse.foodName()).isEqualTo("계란");
-        assertThat(eggResponse.foodCategory()).isEqualTo(FoodCategory.EGG);
-        assertThat(eggResponse.currentQuantity()).isEqualByComparingTo("30");
-        assertThat(eggResponse.quantityAccuracy()).isEqualTo(QuantityAccuracy.EXACT);
-    }
-
-    // 좀 더 간결하게 필요한 것만 테스트하게 Search 안에 바꿔씀
-    @Test
-    @DisplayName("다른 household 검색 결과 섞이지 않는지 확인")
-    void search_only_own_household() {
-        // given
-        Household otherHousehold = householdRepository.save(
-                new Household("딴 집")
-        );
-
-        memberRepository.save(
-                new HouseholdMember(
-                        actor,
-                        otherHousehold,
-                        HouseholdRole.OWNER,
-                        Instant.now()
-                )
-        );
-
-        Long ownStockId = foodStockService.register(
-                actor.getId(), command(household.getId(), milk.getId())
-        );
-
-        Long otherStockId = foodStockService.register(
-                actor.getId(), command(otherHousehold.getId(), milk.getId())
-        );
-
-        // when
-        List<FoodStockListResponse> result =
-                foodStockService.search(actor.getId(), household.getId(), new FoodStockSearchCondition(null, null, null));
-
-        // then
-        assertThat(result)
-                .extracting(FoodStockListResponse::stockId)
-                .containsExactly(ownStockId)
-                .doesNotContain(otherStockId);
-    }
-
-    // 좀 더 간결하게 필요한 것만 테스트하게 Search 안에 바꿔씀
-    @Test
-    @DisplayName("비구성원 검색 요청 거부")
-    void outsider_cannot_search() {
-        // given
-        User outsider = createUser();
-
-        // when & then
-        assertThatThrownBy(() ->
-                foodStockService.search(outsider.getId(), household.getId(), null)
-        ).isInstanceOf(SecurityException.class);
     }
 
     // ===== 프라이빗 헬퍼 =====
@@ -1394,6 +1174,11 @@ class FoodStockServiceIntegrationTest {
 
     /** 검색처럼 식품·상품명만 중요한 테스트용 */
     private Long registerStock(Food food, String productLabel) {
+        return registerStock(food, productLabel, StorageType.REFRIGERATED);
+    }
+
+    // 조건 늘어나서 오버로딩
+    private Long registerStock(Food food, String productLabel, StorageType storageType) {
         return foodStockService.register(
                 actor.getId(),
                 new RegisterFoodStockCommand(
@@ -1403,7 +1188,7 @@ class FoodStockServiceIntegrationTest {
                         QuantityAccuracy.EXACT,
                         LocalDate.of(2026, 11, 24),
                         LocalDate.of(2026, 12, 1),
-                        StorageType.REFRIGERATED,
+                        storageType,
                         AcquisitionType.PURCHASED,
                         productLabel, null
                 )
