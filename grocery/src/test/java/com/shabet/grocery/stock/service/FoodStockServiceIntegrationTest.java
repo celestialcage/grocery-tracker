@@ -1112,27 +1112,64 @@ class FoodStockServiceIntegrationTest {
         @Test
         @DisplayName("키워드 + 카테고리 + 보관방식 모두 조합해 검색")
         void search_by_keyword_food_category_and_storage_type() {
+            // given (더 변별력 있는 데이터 추가)
+            Long wrongCategory = registerStock(egg, "매일 특란");
+            Long wrongStorageType = registerStock(froYo, "매일 프로즌 요거트", StorageType.FROZEN);
+            Long wrongKeyword = registerStock(milk, "덴마크 우유");
+
+            // when
             List<FoodStockListResponse> result = foodStockService.search(
                     actor.getId(), household.getId(),
                     new FoodStockSearchCondition("매일", FoodCategory.DAIRY, StorageType.REFRIGERATED)
             );
 
+            // then
             assertThat(result)
                     .extracting(FoodStockListResponse::stockId)
-                    .containsExactly(milkStockId);
+                    .containsExactly(milkStockId)
+                    .doesNotContain(wrongCategory, wrongStorageType, wrongKeyword);
+        }
+
+        // search_without_keyword랑 겹쳐서 지움
+//        @Test
+//        @DisplayName("모든 검색 조건이 null이면 household 전체 재고 조회")
+//        void search_with_no_condition() {
+//            List<FoodStockListResponse> result = foodStockService.search(
+//                    actor.getId(), household.getId(),
+//                    new FoodStockSearchCondition(null, null, null)
+//            );
+//
+//            assertThat(result)
+//            .extracting(FoodStockListResponse::stockId)
+//                    .containsExactlyInAnyOrder(milkStockId, froYoStockId, dubuStockId, eggStockId);
+//        }
+
+        // 추가: 검색 결과 없는 경우
+        @Test
+        @DisplayName("검색 조건에 맞는 재고가 없으면 빈 목록 반환")
+        void search_returns_empty_when_no_match() {
+            List<FoodStockListResponse> result =
+                    foodStockService.search(
+                            actor.getId(), household.getId(),
+                            new FoodStockSearchCondition("없는식품", null, null)
+                    );
+
+            assertThat(result).isEmpty();
         }
 
         @Test
-        @DisplayName("모든 검색 조건이 null이면 household 전체 재고 조회")
-        void search_with_no_condition() {
+        @DisplayName("SQL 와일드카드를 일반 문자로 검색하는 경우")
+        void search_with_sql_wildcard() {
+            Long labelWithPercent = registerStock(dubu, "할인율 20%");
+
             List<FoodStockListResponse> result = foodStockService.search(
                     actor.getId(), household.getId(),
-                    new FoodStockSearchCondition(null, null, null)
+                    new FoodStockSearchCondition("%", null, null)
             );
 
             assertThat(result)
-            .extracting(FoodStockListResponse::stockId)
-                    .containsExactlyInAnyOrder(milkStockId, froYoStockId, dubuStockId, eggStockId);
+                    .extracting(FoodStockListResponse::stockId)
+                    .containsExactly(labelWithPercent);
         }
 
     }
