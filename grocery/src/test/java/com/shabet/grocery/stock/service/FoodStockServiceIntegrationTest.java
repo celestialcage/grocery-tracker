@@ -23,7 +23,11 @@ import com.shabet.grocery.user.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
@@ -953,6 +957,107 @@ class FoodStockServiceIntegrationTest {
         });
     }
 
+    // 검색 파트 테스트 분리
+    @Nested
+    @DisplayName("검색")
+    class Search {
+
+        Food egg;
+        Food dubu;
+        Long milkStockId;
+        Long eggStockId;
+        Long dubuStockId;
+
+        @BeforeEach
+        void setUpStocks() {
+            egg = saveSystemFood("계란", FoodCategory.EGG, QuantityType.COUNT, StockUnit.EA);
+            dubu = saveSystemFood("두부", FoodCategory.ETC, QuantityType.PORTION, StockUnit.BLOCK);
+
+            milkStockId = registerStock(milk, "매일우유");
+            eggStockId = registerStock(egg, "초록농장 계란");
+            dubuStockId = registerStock(dubu, "풀무원 두부");
+        }
+
+        @Test
+        @DisplayName("식품명으로 검색 시 해당 식품 재고만 반환")
+        void search_by_food_name() {
+            List<FoodStockListResponse> result = foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition("우유", null, null)
+            );
+
+            assertThat(result)
+                    .extracting(FoodStockListResponse::stockId)
+                    .containsExactly(milkStockId);
+        }
+
+        @Test
+        @DisplayName("상품명으로 검색하면 해당 재고 반환")
+        void search_by_product_name() {
+            List<FoodStockListResponse> result = foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition("풀무원", null, null)
+            );
+
+            assertThat(result)
+                    .extracting(FoodStockListResponse::stockId)
+                    .containsExactly(dubuStockId);
+        }
+
+        // ✅ 편리하다... null/빈 문자열/공백 한 번에 다 체크
+        @ParameterizedTest
+        @NullAndEmptySource
+        @ValueSource(strings = {"   "})
+        @DisplayName("검색어가 null이거나 빈 문자열/공백이면 전체 재고 반환")
+        void search_without_keyword(String keyword) {
+            List<FoodStockListResponse> result = foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition(keyword, null, null)
+            );
+
+            assertThat(result)
+                    .extracting(FoodStockListResponse::stockId)
+                    .containsExactlyInAnyOrder(milkStockId, eggStockId, dubuStockId);
+        }
+
+        @Test
+        @DisplayName("다른 가구 재고는 검색 결과에 섞이지 않음")
+        void search_only_own_household() {
+            // given
+            Household otherHousehold = createOtherHousehold(actor);
+            Long otherStockId = foodStockService.register(
+                    actor.getId(), command(otherHousehold.getId(), milk.getId())
+            );
+
+            // when
+            List<FoodStockListResponse> result = foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition("우유", null, null)
+            );
+
+            // then
+            assertThat(result)
+                    .extracting(FoodStockListResponse::stockId)
+                    .containsExactly(milkStockId)
+                    .doesNotContain(otherStockId);
+        }
+
+        @Test
+        @DisplayName("비구성원은 검색 불가")
+        void outsider_cannot_search() {
+            User outsider = createUser();
+
+            assertThatThrownBy(() ->
+                    foodStockService.search(
+                            outsider.getId(), household.getId(),
+                            new FoodStockSearchCondition(null, null, null)
+                    )
+            ).isInstanceOf(SecurityException.class);
+        }
+
+    }
+
+    // 좀 더 간결하게 필요한 것만 테스트하게 Search 안에 바꿔씀
     @Test
     @DisplayName("식품명 우유로 검색 시 우유 재고 반환")
     void search_food_name_milk() {
@@ -1033,6 +1138,7 @@ class FoodStockServiceIntegrationTest {
         });
     }
 
+    // 좀 더 간결하게 필요한 것만 테스트하게 Search 안에 바꿔씀
     @Test
     @DisplayName("상품명 풀무원으로 검색 시 두부 재고 반환")
     void search_product_name_dubu() {
@@ -1114,6 +1220,7 @@ class FoodStockServiceIntegrationTest {
         });
     }
 
+    // 좀 더 간결하게 필요한 것만 테스트하게 Search 안에 바꿔씀
     @Test
     @DisplayName("검색어가 null이나 공백이면 household 전체 재고 반환")
     void search_null_or_blank() {
@@ -1200,6 +1307,7 @@ class FoodStockServiceIntegrationTest {
         assertThat(eggResponse.quantityAccuracy()).isEqualTo(QuantityAccuracy.EXACT);
     }
 
+    // 좀 더 간결하게 필요한 것만 테스트하게 Search 안에 바꿔씀
     @Test
     @DisplayName("다른 household 검색 결과 섞이지 않는지 확인")
     void search_only_own_household() {
@@ -1236,6 +1344,7 @@ class FoodStockServiceIntegrationTest {
                 .doesNotContain(otherStockId);
     }
 
+    // 좀 더 간결하게 필요한 것만 테스트하게 Search 안에 바꿔씀
     @Test
     @DisplayName("비구성원 검색 요청 거부")
     void outsider_cannot_search() {
