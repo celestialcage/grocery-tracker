@@ -952,6 +952,285 @@ class FoodStockServiceIntegrationTest {
         });
     }
 
+    @Test
+    @DisplayName("식품명 우유로 검색 시 우유 재고 반환")
+    void search_food_name_milk() {
+        // given - 세가지 식품
+        Food egg = foodRepository.save(
+                Food.createSystem(
+                        "계란",
+                        FoodCategory.EGG,
+                        QuantityType.COUNT,
+                        StockUnit.EA
+                )
+        );
+
+        Food dubu = foodRepository.save(
+                Food.createSystem(
+                        "두부",
+                        FoodCategory.ETC,
+                        QuantityType.PORTION,
+                        StockUnit.BLOCK
+                )
+        );
+
+        Long milkStockId = foodStockService.register(
+                actor.getId(), command(household.getId(), milk.getId())
+        );
+
+        Long eggStockId = foodStockService.register(
+                actor.getId(), new RegisterFoodStockCommand(
+                        household.getId(),
+                        egg.getId(),
+                        new BigDecimal("30"),
+                        new BigDecimal("30"),
+                        StockUnit.EA,
+                        QuantityAccuracy.EXACT,
+                        LocalDate.of(2026, 11, 24),
+                        LocalDate.of(2026, 12, 10),
+                        StorageType.REFRIGERATED,
+                        AcquisitionType.PURCHASED,
+                        "초록농장 계란",
+                        "사온 계란 한 판"
+                )
+        );
+
+        Long dubuStockId = foodStockService.register(
+                actor.getId(), new RegisterFoodStockCommand(
+                        household.getId(),
+                        dubu.getId(),
+                        new BigDecimal("1"),
+                        new BigDecimal("0.5"),
+                        StockUnit.BLOCK,
+                        QuantityAccuracy.ESTIMATED,
+                        LocalDate.of(2026, 11, 24),
+                        LocalDate.of(2026, 11, 28),
+                        StorageType.REFRIGERATED,
+                        AcquisitionType.EXISTING,
+                        "풀무원 두부",
+                        "반모 남은 두부"
+                )
+        );
+
+        // when
+        List<FoodStockListResponse> result =
+                foodStockService.search(actor.getId(), household.getId(), "우유");
+
+        // then
+        assertThat(result).singleElement().satisfies(stock -> {
+            assertThat(stock.stockId()).isEqualTo(milkStockId);
+            assertThat(stock.currentQuantity()).isEqualByComparingTo("650");
+            assertThat(stock.foodName()).isEqualTo("우유");
+        });
+    }
+
+    @Test
+    @DisplayName("상품명 풀무원으로 검색 시 두부 재고 반환")
+    void search_product_name_dubu() {
+        // given
+        Food egg = foodRepository.save(
+                Food.createSystem(
+                        "계란",
+                        FoodCategory.EGG,
+                        QuantityType.COUNT,
+                        StockUnit.EA
+                )
+        );
+
+        Food dubu = foodRepository.save(
+                Food.createSystem(
+                        "두부",
+                        FoodCategory.ETC,
+                        QuantityType.PORTION,
+                        StockUnit.BLOCK
+                )
+        );
+
+        Long milkStockId = foodStockService.register(
+                actor.getId(), command(household.getId(), milk.getId())
+        );
+
+        Long eggStockId = foodStockService.register(
+                actor.getId(), new RegisterFoodStockCommand(
+                        household.getId(),
+                        egg.getId(),
+                        new BigDecimal("30"),
+                        new BigDecimal("30"),
+                        StockUnit.EA,
+                        QuantityAccuracy.EXACT,
+                        LocalDate.of(2026, 11, 24),
+                        LocalDate.of(2026, 12, 10),
+                        StorageType.REFRIGERATED,
+                        AcquisitionType.PURCHASED,
+                        "초록농장 계란",
+                        "사온 계란 한 판"
+                )
+        );
+
+        Long dubuStockId = foodStockService.register(
+                actor.getId(), new RegisterFoodStockCommand(
+                        household.getId(),
+                        dubu.getId(),
+                        new BigDecimal("1"),
+                        new BigDecimal("0.5"),
+                        StockUnit.BLOCK,
+                        QuantityAccuracy.ESTIMATED,
+                        LocalDate.of(2026, 11, 24),
+                        LocalDate.of(2026, 11, 28),
+                        StorageType.REFRIGERATED,
+                        AcquisitionType.EXISTING,
+                        "풀무원 두부",
+                        "반모 남은 두부"
+                )
+        );
+
+        // when
+        List<FoodStockListResponse> result =
+                foodStockService.search(actor.getId(), household.getId(), "풀무원");
+
+        // then
+        assertThat(result).singleElement().satisfies(stock -> {
+            assertThat(stock.stockId()).isEqualTo(dubuStockId);
+            assertThat(stock.currentQuantity()).isEqualByComparingTo("0.5");
+            assertThat(stock.foodName()).isEqualTo("두부");
+            assertThat(stock.productLabel()).isEqualTo("풀무원 두부");
+        });
+    }
+
+    @Test
+    @DisplayName("검색어가 null이나 공백이면 household 전체 재고 반환")
+    void search_null_or_blank() {
+        // given
+        Food egg = foodRepository.save(
+                Food.createSystem(
+                        "계란",
+                        FoodCategory.EGG,
+                        QuantityType.COUNT,
+                        StockUnit.EA
+                )
+        );
+
+        Food dubu = foodRepository.save(
+                Food.createSystem(
+                        "두부",
+                        FoodCategory.ETC,
+                        QuantityType.PORTION,
+                        StockUnit.BLOCK
+                )
+        );
+
+        Long milkStockId = foodStockService.register(
+                actor.getId(), command(household.getId(), milk.getId())
+        );
+
+        Long eggStockId = foodStockService.register(
+                actor.getId(), new RegisterFoodStockCommand(
+                        household.getId(),
+                        egg.getId(),
+                        new BigDecimal("30"),
+                        new BigDecimal("30"),
+                        StockUnit.EA,
+                        QuantityAccuracy.EXACT,
+                        LocalDate.of(2026, 11, 24),
+                        LocalDate.of(2026, 12, 10),
+                        StorageType.REFRIGERATED,
+                        AcquisitionType.PURCHASED,
+                        "초록농장 계란",
+                        "사온 계란 한 판"
+                )
+        );
+
+        Long dubuStockId = foodStockService.register(
+                actor.getId(), new RegisterFoodStockCommand(
+                        household.getId(),
+                        dubu.getId(),
+                        new BigDecimal("1"),
+                        new BigDecimal("0.5"),
+                        StockUnit.BLOCK,
+                        QuantityAccuracy.ESTIMATED,
+                        LocalDate.of(2026, 11, 24),
+                        LocalDate.of(2026, 11, 28),
+                        StorageType.REFRIGERATED,
+                        AcquisitionType.EXISTING,
+                        "풀무원 두부",
+                        "반모 남은 두부"
+                )
+        );
+
+        // when
+        List<FoodStockListResponse> result =
+                foodStockService.search(actor.getId(), household.getId(), null);
+
+        // then
+        assertThat(result.size()).isEqualTo(3);
+
+        assertThat(result)
+                .extracting(FoodStockListResponse::stockId)
+                .containsExactly(dubuStockId, eggStockId, milkStockId);
+
+        FoodStockListResponse dubuResponse = result.get(0);
+
+        assertThat(dubuResponse.foodName()).isEqualTo("두부");
+        assertThat(dubuResponse.currentQuantity()).isEqualByComparingTo("0.5");
+        assertThat(dubuResponse.quantityAccuracy()).isEqualTo(QuantityAccuracy.ESTIMATED);
+        assertThat(dubuResponse.expiresAt()).isEqualTo(LocalDate.of(2026, 11, 28));
+
+        FoodStockListResponse eggResponse = result.get(1);
+
+        assertThat(eggResponse.foodName()).isEqualTo("계란");
+        assertThat(eggResponse.foodCategory()).isEqualTo(FoodCategory.EGG);
+        assertThat(eggResponse.currentQuantity()).isEqualByComparingTo("30");
+        assertThat(eggResponse.quantityAccuracy()).isEqualTo(QuantityAccuracy.EXACT);
+    }
+
+    @Test
+    @DisplayName("다른 household 검색 결과 섞이지 않는지 확인")
+    void search_only_own_household() {
+        // given
+        Household otherHousehold = householdRepository.save(
+                new Household("딴 집")
+        );
+
+        memberRepository.save(
+                new HouseholdMember(
+                        actor,
+                        otherHousehold,
+                        HouseholdRole.OWNER,
+                        Instant.now()
+                )
+        );
+
+        Long ownStockId = foodStockService.register(
+                actor.getId(), command(household.getId(), milk.getId())
+        );
+
+        Long otherStockId = foodStockService.register(
+                actor.getId(), command(otherHousehold.getId(), milk.getId())
+        );
+
+        // when
+        List<FoodStockListResponse> result =
+                foodStockService.search(actor.getId(), household.getId(), null);
+
+        // then
+        assertThat(result)
+                .extracting(FoodStockListResponse::stockId)
+                .containsExactly(ownStockId)
+                .doesNotContain(otherStockId);
+    }
+
+    @Test
+    @DisplayName("비구성원 검색 요청 거부")
+    void outsider_cannot_search() {
+        // given
+        User outsider = createUser();
+
+        // when & then
+        assertThatThrownBy(() ->
+                foodStockService.search(outsider.getId(), household.getId(), null)
+        ).isInstanceOf(SecurityException.class);
+    }
+
     // 프라이빗 헬퍼
     private User createUser() {
         return userRepository.save(

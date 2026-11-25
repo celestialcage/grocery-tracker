@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 import java.util.Optional;
 
-public interface FoodStockRepository extends JpaRepository<FoodStock, Long> {
+public interface FoodStockRepository extends JpaRepository<FoodStock, Long>, FoodStockSearchRepository {
 
     // 테스트 - 재고 등록 실패 시 해당 household에 재고가 생성되지 않았는지 검증하기 위해 추가한 메서드
     long countByHousehold_Id(Long householdId);

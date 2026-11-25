@@ -230,6 +230,21 @@ public class FoodStockService {
                 .toList();
     }
 
+    // 검색 조회
+    @Transactional(readOnly = true)
+    public List<FoodStockListResponse> search(
+            Long actorUserId,
+            Long householdId,
+            String keyword
+    ) {
+        accessValidator.requireMember(householdId, actorUserId);
+
+        return foodStockRepository.search(householdId, keyword)
+                .stream()
+                .map(FoodStockListResponse::from)
+                .toList();
+    }
+
     private void validateAvailableFood(Food food, Household household) {
 
         if (!food.isActive()) {
