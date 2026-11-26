@@ -11,6 +11,7 @@ import com.shabet.grocery.stock.dto.FoodStockSearchCondition;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Repository
@@ -32,7 +33,9 @@ public class FoodStockSearchRepositoryImpl implements FoodStockSearchRepository 
                         stock.household.id.eq(householdId),
                         keywordContains(food, stock, condition.keyword()),
                         categoryEq(food, condition.category()),
-                        storageTypeEq(stock, condition.storageType())
+                        storageTypeEq(stock, condition.storageType()),
+                        openedEq(stock, condition.opened()),
+                        depletedEq(stock, condition.depleted())
                 )
                 .orderBy(stock.id.desc())
                 .fetch();
@@ -61,5 +64,29 @@ public class FoodStockSearchRepositoryImpl implements FoodStockSearchRepository 
         return storageType == null
                 ? null
                 : stock.storageType.eq(storageType);
+    }
+
+    private BooleanExpression openedEq(
+            QFoodStock stock, Boolean opened
+    ) {
+        if (opened == null) {
+            return null;
+        }
+
+        return opened
+                ? stock.openedAt.isNotNull()
+                : stock.openedAt.isNull();
+    }
+
+    private BooleanExpression depletedEq(
+            QFoodStock stock, Boolean depleted
+    ) {
+        if (depleted == null) {
+            return null;
+        }
+
+        return depleted
+                ? stock.currentQuantity.eq(BigDecimal.ZERO)
+                : stock.currentQuantity.gt(BigDecimal.ZERO);
     }
 }

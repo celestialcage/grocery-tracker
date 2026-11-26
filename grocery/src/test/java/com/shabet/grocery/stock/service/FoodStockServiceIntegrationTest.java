@@ -1018,10 +1018,13 @@ class FoodStockServiceIntegrationTest {
         @NullAndEmptySource
         @ValueSource(strings = {"   "})
         @DisplayName("검색어가 null이거나 빈 문자열/공백이면 전체 재고 반환")
-        void search_without_keyword(String keyword) {
+        void search_without_any_keyword_or_condition(String keyword) {
             List<FoodStockListResponse> result = foodStockService.search(
                     actor.getId(), household.getId(),
-                    new FoodStockSearchCondition(keyword, null, null)
+                    new FoodStockSearchCondition(
+                            keyword, null, null,
+                            null, null
+                    )
             );
 
             assertThat(result)
@@ -1172,7 +1175,191 @@ class FoodStockServiceIntegrationTest {
                     .containsExactly(labelWithPercent);
         }
 
+        // 개봉, 소진 조건 추가
+        @Test
+        @DisplayName("개봉했지만 소진되지 않은 재고만 검색")
+        void search_opened_and_not_depleted() {
+            // given
+            foodStockService.open(
+                    actor.getId(),
+                    new OpenFoodStockCommand(
+                            household.getId(), milkStockId
+                    )
+            );
+
+            foodStockService.open(
+                    actor.getId(),
+                    new OpenFoodStockCommand(
+                            household.getId(), eggStockId
+                    )
+            );
+
+            foodStockService.adjust(
+                    actor.getId(),
+                    new AdjustFoodStockCommand(
+                            household.getId(),
+                            eggStockId,
+                            BigDecimal.ZERO,
+                            QuantityAccuracy.EXACT
+                    )
+            );
+
+            // when
+            List<FoodStockListResponse> result = foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition(
+                            null, null, null,
+                            true, false
+                    )
+            );
+
+            // then
+            assertThat(result)
+                    .extracting(FoodStockListResponse::stockId)
+                    .containsExactly(milkStockId);
+        }
+
+        @Test
+        @DisplayName("개봉한 재고만 반환")
+        void search_opened_only() {
+            // given 일단 개봉을 해야됨. 우유 개봉, 계란 소진
+            foodStockService.open(
+                    actor.getId(),
+                    new OpenFoodStockCommand(
+                            household.getId(), milkStockId
+                    )
+            );
+
+            foodStockService.adjust(
+                    actor.getId(),
+                    new AdjustFoodStockCommand(
+                            household.getId(), eggStockId, BigDecimal.ZERO, QuantityAccuracy.EXACT
+                    )
+            );
+
+            // when
+            List<FoodStockListResponse> result = foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition(
+                            null, null, null,
+                            true, null
+                    )
+            );
+
+            // then
+            assertThat(result)
+                    .extracting(FoodStockListResponse::stockId)
+                    .containsExactly(milkStockId);
+        }
+
+        @Test
+        @DisplayName("미개봉 재고만 반환")
+        void search_unopened_only() {
+            // given
+            foodStockService.open(
+                    actor.getId(),
+                    new OpenFoodStockCommand(
+                            household.getId(), milkStockId
+                    )
+            );
+
+            foodStockService.adjust(
+                    actor.getId(),
+                    new AdjustFoodStockCommand(
+                            household.getId(), eggStockId, BigDecimal.ZERO, QuantityAccuracy.EXACT
+                    )
+            );
+
+            // when
+            List<FoodStockListResponse> result = foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition(
+                            null, null, null,
+                            false, null
+                    )
+            );
+
+            // then
+            assertThat(result)
+                    .extracting(FoodStockListResponse::stockId)
+                    .containsExactlyInAnyOrder(eggStockId, dubuStockId, froYoStockId);
+        }
+
+        @Test
+        @DisplayName("수량이 0인 재고만 반환")
+        void search_depleted_only() {
+            // given - 계란 소진, 우유 개봉
+            foodStockService.adjust(
+                    actor.getId(),
+                    new AdjustFoodStockCommand(
+                            household.getId(), eggStockId, BigDecimal.ZERO, QuantityAccuracy.EXACT
+                    )
+            );
+
+            foodStockService.open(
+                    actor.getId(),
+                    new OpenFoodStockCommand(
+                            household.getId(), milkStockId
+                    )
+            );
+
+            // when
+            List<FoodStockListResponse> result = foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition(
+                            null, null, null,
+                            null, true
+                    )
+            );
+
+            // then - 계란
+            assertThat(result)
+                    .extracting(FoodStockListResponse::stockId)
+                    .containsExactly(eggStockId);
+        }
+
+        @Test
+        @DisplayName("수량이 양수인 재고만 반환")
+        void search_not_depleted() {
+            // given - 계란, 우유 소진, 두부 개봉
+            foodStockService.adjust(
+                    actor.getId(),
+                    new AdjustFoodStockCommand(
+                            household.getId(), eggStockId, BigDecimal.ZERO, QuantityAccuracy.EXACT
+                    )
+            );
+
+            foodStockService.open(
+                    actor.getId(),
+                    new OpenFoodStockCommand(
+                            household.getId(), dubuStockId
+                    )
+            );
+
+            foodStockService.adjust(
+                    actor.getId(),
+                    new AdjustFoodStockCommand(
+                            household.getId(), milkStockId, BigDecimal.ZERO, QuantityAccuracy.EXACT
+                    )
+            );
+
+            // when
+            List<FoodStockListResponse> result = foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition(
+                            null, null, null,
+                            null, false
+                    )
+            );
+
+            // then
+            assertThat(result)
+                    .extracting(FoodStockListResponse::stockId)
+                    .containsExactlyInAnyOrder(dubuStockId, froYoStockId);
+        }
+
     }
+
 
     // ===== 프라이빗 헬퍼 =====
     private User createUser() {
