@@ -1,5 +1,6 @@
 package com.shabet.grocery.stock.repository;
 
+import com.querydsl.core.types.Predicate;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.shabet.grocery.food.domain.FoodCategory;
@@ -9,6 +10,9 @@ import com.shabet.grocery.stock.domain.QFoodStock;
 import com.shabet.grocery.stock.domain.StorageType;
 import com.shabet.grocery.stock.dto.FoodStockSearchCondition;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
@@ -30,18 +34,38 @@ public class FoodStockSearchRepositoryImpl implements FoodStockSearchRepository 
         return queryFactory
                 .selectFrom(stock)
                 .join(stock.food, food).fetchJoin()
-                .where(
-                        stock.household.id.eq(householdId),
-                        keywordContains(food, stock, condition.keyword()),
-                        categoryEq(food, condition.category()),
-                        storageTypeEq(stock, condition.storageType()),
-                        openedEq(stock, condition.opened()),
-                        depletedEq(stock, condition.depleted()),
-                        expiresFromGoe(stock, condition.expiresFrom()),
-                        expiresToLoe(stock, condition.expiresTo())
-                )
+                .where(searchPredicates(householdId, condition, stock, food))
                 .orderBy(stock.id.desc())
                 .fetch();
+    }
+
+    @Override
+    public Page<FoodStock> searchPage(
+            Long householdId, FoodStockSearchCondition condition,
+            Pageable pageable
+    ) {
+        QFoodStock stock = QFoodStock.foodStock;
+        QFood food = QFood.food;
+
+        // 검색 조건 구성
+        List<FoodStock> content = queryFactory
+                .selectFrom(stock)
+                .join(stock.food, food).fetchJoin()
+                .where(searchPredicates(householdId, condition, stock, food))
+                .orderBy(stock.id.desc())
+                .offset(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetch();
+
+        // 전체 개수 조회
+        Long total = queryFactory
+                .select(stock.count())
+                .from(stock)
+                .join(stock.food, food)
+                .where(searchPredicates(householdId, condition, stock, food))
+                .fetchOne();
+
+        return new PageImpl<>(content, pageable, total == null ? 0L : total);
     }
 
     private BooleanExpression keywordContains(QFood food, QFoodStock stock, String keyword) {
@@ -111,5 +135,23 @@ public class FoodStockSearchRepositoryImpl implements FoodStockSearchRepository 
         return to == null
                 ? null
                 : stock.expiresAt.loe(to);
+    }
+
+    private Predicate[] searchPredicates(
+            Long householdId,
+            FoodStockSearchCondition condition,
+            QFoodStock stock,
+            QFood food
+    ) {
+        return new Predicate[]{
+                stock.household.id.eq(householdId),
+                keywordContains(food, stock, condition.keyword()),
+                categoryEq(food, condition.category()),
+                storageTypeEq(stock, condition.storageType()),
+                openedEq(stock, condition.opened()),
+                depletedEq(stock, condition.depleted()),
+                expiresFromGoe(stock, condition.expiresFrom()),
+                expiresToLoe(stock, condition.expiresTo())
+        };
     }
 }

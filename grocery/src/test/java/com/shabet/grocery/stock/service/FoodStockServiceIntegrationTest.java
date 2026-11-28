@@ -31,6 +31,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
@@ -1638,6 +1641,106 @@ class FoodStockServiceIntegrationTest {
                     .containsExactly(eggStockId)
                     .doesNotContain(twentyEighth);
 
+        }
+
+        // 검색에 페이징 추가
+        @Test
+        @DisplayName("첫 페이지에 2건 반환, 전체 건수 4건")
+        void search_first_page() {
+            // given
+            Pageable pageable = PageRequest.of(0, 2);
+
+            // when
+            Page<FoodStockListResponse> result =
+                    foodStockService.searchPage(
+                            actor.getId(),
+                            household.getId(),
+                            new FoodStockSearchCondition(null, null, null),
+                            pageable
+                    );
+
+            // then
+            assertThat(result.getContent())
+                    .extracting(FoodStockListResponse::stockId)
+                    .containsExactly(froYoStockId, dubuStockId);
+
+            assertThat(result.getTotalElements()).isEqualTo(4);
+            assertThat(result.getTotalPages()).isEqualTo(2);
+            assertThat(result.hasNext()).isTrue();
+        }
+
+        @Test
+        @DisplayName("두 번째 페이지가 첫 페이지와 중복되지 않는지 검증")
+        void second_page_not_repeating_first_page() {
+            // given
+            Pageable pageableFirst = PageRequest.of(0, 2);
+            Pageable pageableSecond = PageRequest.of(1, 2);
+
+            // when
+            Page<FoodStockListResponse> firstPage =
+                    foodStockService.searchPage(
+                            actor.getId(),
+                            household.getId(),
+                            new FoodStockSearchCondition(null, null, null),
+                            pageableFirst
+                    );
+
+            Page<FoodStockListResponse> secondPage =
+                    foodStockService.searchPage(
+                            actor.getId(),
+                            household.getId(),
+                            new FoodStockSearchCondition(null, null, null),
+                            pageableSecond
+                    );
+
+            // then
+            assertThat(firstPage.getContent())
+                    .extracting(FoodStockListResponse::stockId)
+                    .containsExactly(froYoStockId, dubuStockId);
+            assertThat(secondPage.getContent())
+                    .extracting(FoodStockListResponse::stockId)
+                    .containsExactly(eggStockId, milkStockId);
+        }
+
+        @Test
+        @DisplayName("카테고리 필터 적용 시 Count Query도 같은 조건을 사용하는지 확인")
+        void count_query_applies_same_category_filter() {
+            // given
+            Pageable pageable = PageRequest.of(0, 2);
+
+            // when
+            Page<FoodStockListResponse> result = foodStockService.searchPage(
+                    actor.getId(),
+                    household.getId(),
+                    new FoodStockSearchCondition(null, FoodCategory.DAIRY, null),
+                    pageable
+            );
+
+            // then
+            assertThat(result.getContent())
+                    .extracting(FoodStockListResponse::stockId)
+                    .containsExactly(froYoStockId, milkStockId);
+
+            assertThat(result.getTotalElements()).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("검색 결과가 없을 때 빈 Page 반환")
+        void return_empty_page_when_no_search_result() {
+            // given
+            Pageable pageable = PageRequest.of(0, 2);
+
+            // when
+            Page<FoodStockListResponse> result = foodStockService.searchPage(
+                    actor.getId(),
+                    household.getId(),
+                    new FoodStockSearchCondition("있을리없는음식", null, null),
+                    pageable
+            );
+
+            // then
+            assertThat(result.getTotalElements()).isEqualTo(0);
+            assertThat(result.getContent()).isEmpty();
         }
 
     }

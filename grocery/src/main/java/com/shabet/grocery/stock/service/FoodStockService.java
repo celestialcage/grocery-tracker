@@ -17,6 +17,8 @@ import com.shabet.grocery.stock.repository.StockHistoryRepository;
 import com.shabet.grocery.user.domain.User;
 import com.shabet.grocery.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -246,6 +248,28 @@ public class FoodStockService {
                 .stream()
                 .map(FoodStockListResponse::from)
                 .toList();
+    }
+
+    // 검색 및 페이징
+    @Transactional(readOnly = true)
+    public Page<FoodStockListResponse> searchPage(
+            Long actorUserId,
+            Long householdId,
+            FoodStockSearchCondition condition,
+            Pageable pageable
+    ) {
+        accessValidator.requireMember(householdId, actorUserId);
+
+        Objects.requireNonNull(condition, "검색 조건은 필수입니다.");
+        Objects.requireNonNull(pageable, "페이지 정보는 필수입니다.");
+
+        if (pageable.isUnpaged()) {
+            throw new IllegalArgumentException("페이지 지정이 필요합니다.");
+        }
+
+        return foodStockRepository
+                .searchPage(householdId, condition, pageable)
+                .map(FoodStockListResponse::from);
     }
 
     private void validateAvailableFood(Food food, Household household) {
