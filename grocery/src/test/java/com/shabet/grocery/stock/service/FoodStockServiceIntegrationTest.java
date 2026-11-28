@@ -1398,7 +1398,7 @@ class FoodStockServiceIntegrationTest {
             // then
             assertThat(result)
                     .extracting(FoodStockListResponse::stockId)
-                    .contains(boundaryStockId);
+                    .containsExactly(boundaryStockId);
         }
 
         @Test
@@ -1635,6 +1635,7 @@ class FoodStockServiceIntegrationTest {
             // then
             assertThat(result)
                     .extracting(FoodStockListResponse::stockId)
+                    .containsExactly(eggStockId)
                     .doesNotContain(twentyEighth);
 
         }

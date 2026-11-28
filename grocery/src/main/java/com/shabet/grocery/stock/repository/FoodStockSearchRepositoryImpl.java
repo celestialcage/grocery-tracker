@@ -93,7 +93,8 @@ public class FoodStockSearchRepositoryImpl implements FoodStockSearchRepository 
                 : stock.currentQuantity.gt(BigDecimal.ZERO);
     }
 
-    // 기간(날짜) 조건, between 대신 분리. expiresAt이 null인 경우도 포함하기 위해서
+    // 기간(날짜) 조건, between 대신 분리. 시작일 또는 종료일 중 하나만 지정할 수 있도록 하기 위해서.
+    // 날짜 조건이 지정되면 expiresAt이 null인 재고는 제외됨
     private BooleanExpression expiresFromGoe(
             QFoodStock stock,
             LocalDate from
