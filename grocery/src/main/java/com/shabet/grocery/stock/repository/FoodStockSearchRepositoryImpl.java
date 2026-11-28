@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 @Repository
@@ -35,7 +36,9 @@ public class FoodStockSearchRepositoryImpl implements FoodStockSearchRepository 
                         categoryEq(food, condition.category()),
                         storageTypeEq(stock, condition.storageType()),
                         openedEq(stock, condition.opened()),
-                        depletedEq(stock, condition.depleted())
+                        depletedEq(stock, condition.depleted()),
+                        expiresFromGoe(stock, condition.expiresFrom()),
+                        expiresToLoe(stock, condition.expiresTo())
                 )
                 .orderBy(stock.id.desc())
                 .fetch();
@@ -88,5 +91,24 @@ public class FoodStockSearchRepositoryImpl implements FoodStockSearchRepository 
         return depleted
                 ? stock.currentQuantity.eq(BigDecimal.ZERO)
                 : stock.currentQuantity.gt(BigDecimal.ZERO);
+    }
+
+    // 기간(날짜) 조건, between 대신 분리. expiresAt이 null인 경우도 포함하기 위해서
+    private BooleanExpression expiresFromGoe(
+            QFoodStock stock,
+            LocalDate from
+    ) {
+        return from == null
+                ? null
+                : stock.expiresAt.goe(from);
+    }
+
+    private BooleanExpression expiresToLoe(
+            QFoodStock stock,
+            LocalDate to
+    ) {
+        return to == null
+                ? null
+                : stock.expiresAt.loe(to);
     }
 }

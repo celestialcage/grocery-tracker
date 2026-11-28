@@ -1358,6 +1358,287 @@ class FoodStockServiceIntegrationTest {
                     .containsExactlyInAnyOrder(dubuStockId, froYoStockId);
         }
 
+        // 기간 검색 테스트 - 날짜 경계 검증 중요
+        @Test
+        @DisplayName("소비기한 시작일과 종료일을 포함해 검색")
+        void search_by_expiration_range() {
+            // given
+            Long boundaryStockId = registerStock(
+                    egg,
+                    "11월 28일 소비기한 계란",
+                    StorageType.REFRIGERATED,
+                    LocalDate.of(2026, 11, 28)
+            );
+
+            registerStock(
+                    dubu,
+                    "11월 29일 소비기한 두부",
+                    StorageType.REFRIGERATED,
+                    LocalDate.of(2026, 11, 29)
+            );
+
+            registerStock(
+                    froYo,
+                    "소비기한 미등록 상품",
+                    StorageType.FROZEN,
+                    null
+            );
+
+            // when
+            List<FoodStockListResponse> result = foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition(
+                            null, null, null,
+                            null, null,
+                            LocalDate.of(2026, 11, 28),
+                            LocalDate.of(2026, 11, 28)
+                    )
+            );
+
+            // then
+            assertThat(result)
+                    .extracting(FoodStockListResponse::stockId)
+                    .contains(boundaryStockId);
+        }
+
+        @Test
+        @DisplayName("시작일과 종료일 사이의 소비기한만 검색")
+        void search_by_expiration_date_range() {
+            // given
+            Long twentyEighth = registerStock(
+                    egg,
+                    "11월 28일 소비기한 계란",
+                    StorageType.REFRIGERATED,
+                    LocalDate.of(2026, 11, 28)
+            );
+
+            Long twentyNinth = registerStock(
+                    dubu,
+                    "11월 29일 소비기한 두부",
+                    StorageType.REFRIGERATED,
+                    LocalDate.of(2026, 11, 29)
+            );
+
+            Long expiryDateNull = registerStock(
+                    froYo,
+                    "소비기한 미등록 상품",
+                    StorageType.FROZEN,
+                    null
+            );
+
+            // when
+            List<FoodStockListResponse> result = foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition(
+                            null, null, null,
+                            null, null,
+                            LocalDate.of(2026, 11, 28),
+                            LocalDate.of(2026, 11, 29)
+                    )
+            );
+
+            // then
+            assertThat(result)
+                    .extracting(FoodStockListResponse::stockId)
+                    .containsExactlyInAnyOrder(twentyEighth, twentyNinth)
+                    .doesNotContain(expiryDateNull);
+        }
+
+        @Test
+        @DisplayName("시작일만 지정했을 때 해당 날짜 포함 이후 검색")
+        void search_from_start_date_inclusive() {
+            // given
+            Long twentyEighth = registerStock(
+                    egg,
+                    "11월 28일 소비기한 계란",
+                    StorageType.REFRIGERATED,
+                    LocalDate.of(2026, 11, 28)
+            );
+
+            Long twentyNinth = registerStock(
+                    dubu,
+                    "11월 29일 소비기한 두부",
+                    StorageType.REFRIGERATED,
+                    LocalDate.of(2026, 11, 29)
+            );
+
+            Long expiryDateNull = registerStock(
+                    froYo,
+                    "소비기한 미등록 상품",
+                    StorageType.FROZEN,
+                    null
+            );
+
+            // when
+            List<FoodStockListResponse> result = foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition(
+                            null, null, null,
+                            null, null,
+                            LocalDate.of(2026, 11, 29),
+                            null
+                    )
+            );
+
+            // then
+            assertThat(result)
+                    .extracting(FoodStockListResponse::stockId)
+                    .containsExactlyInAnyOrder(twentyNinth, milkStockId, eggStockId, froYoStockId, dubuStockId)
+                    .doesNotContain(expiryDateNull, twentyEighth);
+        }
+
+        @Test
+        @DisplayName("종료일만 지정했을 때 해당 날짜 포함 이전 검색")
+        void search_until_end_date_inclusive() {
+            // given
+            Long twentyEighth = registerStock(
+                    egg,
+                    "11월 28일 소비기한 계란",
+                    StorageType.REFRIGERATED,
+                    LocalDate.of(2026, 11, 28)
+            );
+
+            Long twentyNinth = registerStock(
+                    dubu,
+                    "11월 29일 소비기한 두부",
+                    StorageType.REFRIGERATED,
+                    LocalDate.of(2026, 11, 29)
+            );
+
+            Long expiryDateNull = registerStock(
+                    froYo,
+                    "소비기한 미등록 상품",
+                    StorageType.FROZEN,
+                    null
+            );
+
+            // when
+            List<FoodStockListResponse> result = foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition(
+                            null, null, null,
+                            null, null,
+                            null,
+                            LocalDate.of(2026, 11, 29)
+                    )
+            );
+
+            // then
+            assertThat(result)
+                    .extracting(FoodStockListResponse::stockId)
+                    .containsExactlyInAnyOrder(twentyNinth, twentyEighth)
+                    .doesNotContain(expiryDateNull, milkStockId, eggStockId, froYoStockId, dubuStockId);
+        }
+
+        // search_by_expiration_range와 동일한듯해서 제외
+//        @Test
+//        @DisplayName("시작일과 종료일이 같은 경우 정상 검색")
+//        void search_when_start_and_end_date_same() {
+//
+//        }
+
+        @Test
+        @DisplayName("소비기한이 null인 재고가 날짜 필터에서 제외되는지 확인")
+        void exclude_null_expiration_date_on_filter() {
+            // given
+            Long expiryDateNull = registerStock(
+                    froYo,
+                    "소비기한 미등록 상품",
+                    StorageType.FROZEN,
+                    null
+            );
+
+            // when
+            List<FoodStockListResponse> result = foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition(
+                            null, null, null,
+                            null, null,
+                            LocalDate.of(2026, 10, 1),
+                            LocalDate.of(2026, 12, 31)
+                    )
+            );
+
+            // then
+            assertThat(result)
+                    .extracting(FoodStockListResponse::stockId)
+                    .doesNotContain(expiryDateNull);
+        }
+
+        @Test
+        @DisplayName("두 날짜가 모두 null이면 소비기한 미등록 재고도 포함")
+        void include_null_expiration_when_both_dates_null() {
+            // given
+            Long expiryDateNull = registerStock(
+                    froYo,
+                    "소비기한 미등록 상품",
+                    StorageType.FROZEN,
+                    null
+            );
+
+            // when
+            List<FoodStockListResponse> result = foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition(
+                            null, null, null,
+                            null, null,
+                            null, null
+                    )
+            );
+
+            // then
+            assertThat(result)
+                    .extracting(FoodStockListResponse::stockId)
+                    .contains(expiryDateNull);
+        }
+
+        @Test
+        @DisplayName("시작일 > 종료일인 경우 IllegalArgumentException 검증")
+        void throw_illegal_argument_when_start_after_end() {
+            // given
+
+            // when & then
+            assertThatThrownBy(() -> foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition(
+                            null, null, null,
+                            null, null,
+                            LocalDate.of(2026, 12, 1),
+                            LocalDate.of(2026, 11, 1)
+                    )
+            )).isInstanceOf(IllegalArgumentException.class);
+
+        }
+
+        @Test
+        @DisplayName("기존 키워드·카테고리 조건과 소비기한 조건 조합")
+        void search_with_keyword_category_and_expiration() {
+            // given
+            Long twentyEighth = registerStock(
+                    egg,
+                    "11월 28일 소비기한 계란",
+                    StorageType.REFRIGERATED,
+                    LocalDate.of(2026, 11, 28)
+            );
+
+            // when
+            List<FoodStockListResponse> result = foodStockService.search(
+                    actor.getId(), household.getId(),
+                    new FoodStockSearchCondition(
+                            "계란", FoodCategory.EGG, StorageType.REFRIGERATED,
+                            false, false,
+                            LocalDate.of(2026, 11, 29),
+                            LocalDate.of(2026, 12, 1)
+                    )
+            );
+
+            // then
+            assertThat(result)
+                    .extracting(FoodStockListResponse::stockId)
+                    .doesNotContain(twentyEighth);
+
+        }
+
     }
 
 
@@ -1403,6 +1684,15 @@ class FoodStockServiceIntegrationTest {
 
     // 조건 늘어나서 오버로딩
     private Long registerStock(Food food, String productLabel, StorageType storageType) {
+        return registerStock(
+                food, productLabel, storageType, LocalDate.of(2026, 12, 1)
+        );
+    }
+
+    // 조건 늘어나서 오버로딩 또함
+    private Long registerStock(
+            Food food, String productLabel, StorageType storageType, LocalDate expiresAt
+    ) {
         return foodStockService.register(
                 actor.getId(),
                 new RegisterFoodStockCommand(
@@ -1411,7 +1701,7 @@ class FoodStockServiceIntegrationTest {
                         food.getDefaultUnit(),
                         QuantityAccuracy.EXACT,
                         LocalDate.of(2026, 11, 24),
-                        LocalDate.of(2026, 12, 1),
+                        expiresAt,
                         storageType,
                         AcquisitionType.PURCHASED,
                         productLabel, null
